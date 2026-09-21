@@ -754,16 +754,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
           </div>
-
-          <div className="pt-4 mt-4 border-t border-slate-100">
-            {/* <<button
-              onClick={() => onNavigateTab('absen')}
-              className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold shadow-md shadow-purple-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              span>Buka Validasi Verval PD</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>*/}
-          </div>
         </div>
       </div>
 
