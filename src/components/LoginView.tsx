@@ -6,7 +6,6 @@ import {
   User, 
   AlertCircle, 
   ArrowRight, 
-  Shield, 
   Building2 
 } from 'lucide-react';
 
@@ -87,13 +86,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ gtkList, onLogin }) => {
               />
             </div>
             <h1 className="text-xl font-bold tracking-tight">SMKN 1 PALOPO</h1>
-            {/* <p className="text-xs text-indigo-100 font-medium mt-0.5">
-              Sistem Informasi Manajemen Sekolah & GTK
-            </p>*/}
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/40 text-[11px] font-semibold text-indigo-100 mt-2 border border-indigo-300/30">
-              <Shield className="w-3 h-3 text-emerald-300" />
-              <span>Autentikasi Portal GTK</span>
-            </div>
           </div>
 
           {/* Form Content */}
@@ -102,9 +94,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ gtkList, onLogin }) => {
               <h2 className="text-base font-bold text-slate-800">
                 Masuk Menggunakan NIP
               </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Masukkan Nomor Induk Pegawai (NIP) Anda yang terdaftar pada sistem dapodik
-              </p>
             </div>
 
             {/* Error Notification */}
@@ -118,9 +107,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ gtkList, onLogin }) => {
             {/* Login Form */}
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  NIP GTK <span className="text-rose-500">*</span>
-                </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <User className="w-4 h-4 text-slate-500" />
@@ -129,6 +115,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ gtkList, onLogin }) => {
                     type="text"
                     required
                     autoFocus
+                    aria-label="NIP GTK"
                     value={nipInput}
                     onChange={(e) => {
                       setNipInput(e.target.value);
@@ -138,9 +125,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ gtkList, onLogin }) => {
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50 hover:bg-white focus:bg-white rounded-xl border border-slate-300 font-semibold text-slate-800 placeholder:text-slate-400 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                   />
                 </div>
-                <p className="text-[11px] text-slate-500 mt-1.5 flex items-center justify-between">
-                  <span>Gunakan NIP resmi yang tertera di SK</span>
-                  {nipInput && (
+                {nipInput && (
+                  <div className="text-right mt-1.5">
                     <button
                       type="button"
                       onClick={() => setNipInput('')}
@@ -148,8 +134,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ gtkList, onLogin }) => {
                     >
                       Bersihkan
                     </button>
-                  )}
-                </p>
+                  </div>
+                )}
               </div>
 
               <button
