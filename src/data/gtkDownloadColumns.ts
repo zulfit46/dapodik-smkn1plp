@@ -279,3 +279,70 @@ export function saveGTKAllowedDownloadHeaders(allowedKeys: string[]): boolean {
 export function resetGTKAllowedDownloadHeaders(): boolean {
   return saveGTKAllowedDownloadHeaders(DEFAULT_GTK_ALLOWED_DOWNLOAD_HEADERS);
 }
+
+/**
+ * Fetches allowed download headers from the server, syncing with local storage.
+ * If local storage has custom admin configuration and server has defaults,
+ * it auto-promotes the local custom configuration to the server.
+ */
+export async function fetchGTKAllowedDownloadHeadersFromServer(): Promise<string[]> {
+  const localHeaders = getGTKAllowedDownloadHeaders();
+  const validKeySet = new Set(ALL_DOWNLOAD_COLUMNS.map((c) => c.key));
+
+  try {
+    const res = await fetch('/api/gtk/download-headers', { 
+      signal: AbortSignal.timeout(5000),
+      headers: { 'Cache-Control': 'no-cache' }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === 'success' && Array.isArray(data.headers) && data.headers.length > 0) {
+        const serverHeaders = data.headers.filter((k: any) => typeof k === 'string' && validKeySet.has(k));
+
+        const isDefaultList = (list: string[]) => 
+          list.length === DEFAULT_GTK_ALLOWED_DOWNLOAD_HEADERS.length &&
+          list.every((k) => DEFAULT_GTK_ALLOWED_DOWNLOAD_HEADERS.includes(k));
+
+        const serverIsDefault = isDefaultList(serverHeaders);
+        const localIsCustom = !isDefaultList(localHeaders);
+
+        // If server still has default 5 headers, but local already has Admin's custom headers, push local to server!
+        if (serverIsDefault && localIsCustom) {
+          syncGTKAllowedDownloadHeadersToServer(localHeaders).catch(() => {});
+          return localHeaders;
+        }
+
+        if (serverHeaders.length > 0) {
+          saveGTKAllowedDownloadHeaders(serverHeaders);
+          return serverHeaders;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[DownloadHeaders] Failed to fetch allowed headers from server, falling back to local:', err);
+  }
+
+  return localHeaders;
+}
+
+/**
+ * Synchronizes allowed download headers to the server backend and local storage.
+ */
+export async function syncGTKAllowedDownloadHeadersToServer(allowedKeys: string[]): Promise<boolean> {
+  // 1. Save to local storage immediately
+  saveGTKAllowedDownloadHeaders(allowedKeys);
+
+  // 2. Push to backend server
+  try {
+    const res = await fetch('/api/gtk/download-headers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ headers: allowedKeys })
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('[DownloadHeaders] Failed to sync allowed headers to server:', err);
+    return false;
+  }
+}
