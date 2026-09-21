@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { INITIAL_STUDENTS, INITIAL_ATTENDANCE } from "./src/data/initialData.js";
 import { INITIAL_WALI_KELAS_LIST, INITIAL_WALI_KELAS } from "./src/data/initialWaliKelas.js";
@@ -18,6 +19,22 @@ let cachedJurusanList: Jurusan[] = [...INITIAL_JURUSAN_LIST];
 let cachedGTKList: GTKData[] = [...INITIAL_GTK_LIST];
 let cachedPangkatList: RiwayatPangkat[] = [...INITIAL_RIWAYAT_PANGKAT];
 let cachedKGBList: RiwayatKGB[] = [...INITIAL_RIWAYAT_KGB];
+
+// Persistent Allowed Download Headers for GTK
+const HEADERS_CACHE_FILE = path.join(process.cwd(), 'gtk_download_headers.json');
+let cachedGtkDownloadHeaders: string[] = ['nama', 'kelas', 'nipd', 'nisn', 'jk'];
+try {
+  if (fs.existsSync(HEADERS_CACHE_FILE)) {
+    const raw = fs.readFileSync(HEADERS_CACHE_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      cachedGtkDownloadHeaders = parsed.map(String);
+      console.log(`Loaded ${cachedGtkDownloadHeaders.length} download headers from gtk_download_headers.json`);
+    }
+  }
+} catch (e) {
+  console.warn('Failed to load gtk_download_headers.json:', e);
+}
 
 let appConfig: AppConfig = {
   spreadsheetId: '1t_i5_kMDb00AT2uL0Km49_37CHJB2RWUv3tZjVgLlAk',
@@ -897,6 +914,37 @@ async function startServer() {
       total: list.length,
       data: list
     });
+  });
+
+  // GET Allowed Download Headers for GTK
+  app.get("/api/gtk/download-headers", (req, res) => {
+    res.json({
+      status: "success",
+      headers: cachedGtkDownloadHeaders
+    });
+  });
+
+  // POST Update Allowed Download Headers for GTK
+  app.post("/api/gtk/download-headers", (req, res) => {
+    try {
+      const { headers } = req.body;
+      if (Array.isArray(headers) && headers.length > 0) {
+        cachedGtkDownloadHeaders = headers.map(String);
+        try {
+          fs.writeFileSync(HEADERS_CACHE_FILE, JSON.stringify(cachedGtkDownloadHeaders, null, 2), 'utf-8');
+        } catch (fileErr) {
+          console.warn('Could not write to gtk_download_headers.json:', fileErr);
+        }
+        return res.json({
+          status: "success",
+          message: "Header download GTK berhasil disimpan di server",
+          headers: cachedGtkDownloadHeaders
+        });
+      }
+      return res.status(400).json({ status: "error", message: "Daftar headers tidak valid" });
+    } catch (err: any) {
+      return res.status(500).json({ status: "error", message: err.message || "Gagal menyimpan headers" });
+    }
   });
 
   // POST Update Akses Menu GTK
