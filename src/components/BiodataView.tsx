@@ -94,7 +94,7 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
   // Always fetch latest allowed download headers from server on mount
   React.useEffect(() => {
     let isMounted = true;
-    fetchGTKAllowedDownloadHeadersFromServer().then((headers) => {
+    fetchGTKAllowedDownloadHeadersFromServer(webAppUrl).then((headers) => {
       if (isMounted && headers && headers.length > 0) {
         setAllowedGtkHeaders(headers);
         if (onUpdateAllowedGtkHeaders) {
@@ -102,10 +102,23 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
         }
       }
     });
+
+    const handleCustomUpdate = (e: any) => {
+      if (isMounted && e.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+        setAllowedGtkHeaders(e.detail);
+        if (onUpdateAllowedGtkHeaders) {
+          onUpdateAllowedGtkHeaders(e.detail);
+        }
+      }
+    };
+
+    window.addEventListener('gtk_download_headers_updated', handleCustomUpdate);
+
     return () => {
       isMounted = false;
+      window.removeEventListener('gtk_download_headers_updated', handleCustomUpdate);
     };
-  }, []);
+  }, [webAppUrl]);
 
   // Column visibility state (default all 11 columns visible for Admin)
   const [visibleColumns, setVisibleColumns] = useState({
@@ -753,6 +766,7 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
           isOpen={isGtkHeadersModalOpen}
           onClose={() => setIsGtkHeadersModalOpen(false)}
           currentAllowedKeys={allowedGtkHeaders}
+          webAppUrl={webAppUrl}
           onSaveSuccess={(updatedKeys) => {
             setAllowedGtkHeaders(updatedKeys);
             if (onUpdateAllowedGtkHeaders) {
