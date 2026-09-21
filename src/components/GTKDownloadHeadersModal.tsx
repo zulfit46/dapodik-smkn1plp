@@ -16,7 +16,8 @@ import {
   ALL_DOWNLOAD_COLUMNS, 
   DEFAULT_GTK_ALLOWED_DOWNLOAD_HEADERS,
   DownloadColumnDefinition,
-  saveGTKAllowedDownloadHeaders 
+  saveGTKAllowedDownloadHeaders,
+  syncGTKAllowedDownloadHeadersToServer 
 } from '../data/gtkDownloadColumns';
 
 interface GTKDownloadHeadersModalProps {
@@ -38,6 +39,7 @@ export const GTKDownloadHeadersModal: React.FC<GTKDownloadHeadersModalProps> = (
       : [...DEFAULT_GTK_ALLOWED_DOWNLOAD_HEADERS];
   });
   const [saveToast, setSaveToast] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Sync state when modal opens
   React.useEffect(() => {
@@ -48,6 +50,7 @@ export const GTKDownloadHeadersModal: React.FC<GTKDownloadHeadersModalProps> = (
           : [...DEFAULT_GTK_ALLOWED_DOWNLOAD_HEADERS]
       );
       setSaveToast(false);
+      setIsSaving(false);
     }
   }, [isOpen, currentAllowedKeys]);
 
@@ -77,14 +80,16 @@ export const GTKDownloadHeadersModal: React.FC<GTKDownloadHeadersModalProps> = (
     setSelectedKeys(['nama', 'kelas', 'nipd', 'nisn', 'jk', 'tempatLahir', 'tanggalLahir', 'agama']);
   };
 
-  const handleSave = () => {
-    saveGTKAllowedDownloadHeaders(selectedKeys);
+  const handleSave = async () => {
+    setIsSaving(true);
+    await syncGTKAllowedDownloadHeadersToServer(selectedKeys);
     onSaveSuccess(selectedKeys);
+    setIsSaving(false);
     setSaveToast(true);
     setTimeout(() => {
       setSaveToast(false);
       onClose();
-    }, 900);
+    }, 1000);
   };
 
   // Group columns by category
@@ -315,20 +320,26 @@ export const GTKDownloadHeadersModal: React.FC<GTKDownloadHeadersModalProps> = (
             </button>
             <button
               type="button"
+              disabled={isSaving}
               onClick={handleSave}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-2xs transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-2xs transition-all cursor-pointer disabled:opacity-60 ${
                 saveToast ? 'bg-emerald-600' : 'bg-indigo-600 hover:bg-indigo-700'
               }`}
             >
-              {saveToast ? (
+              {isSaving ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Menyimpan ke Server...</span>
+                </>
+              ) : saveToast ? (
                 <>
                   <Check className="w-4 h-4 stroke-[3]" />
-                  <span>Tersimpan!</span>
+                  <span>Tersimpan di Server!</span>
                 </>
               ) : (
                 <>
                   <ShieldCheck className="w-4 h-4" />
-                  <span>Simpan Pengaturan</span>
+                  <span>Simpan ke Server</span>
                 </>
               )}
             </button>
