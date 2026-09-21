@@ -87,9 +87,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ gtkList, onLogin }) => {
               />
             </div>
             <h1 className="text-xl font-bold tracking-tight">SMKN 1 PALOPO</h1>
-            <p className="text-xs text-indigo-100 font-medium mt-0.5">
+            {/* <p className="text-xs text-indigo-100 font-medium mt-0.5">
               Sistem Informasi Manajemen Sekolah & GTK
-            </p>
+            </p>*/}
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/40 text-[11px] font-semibold text-indigo-100 mt-2 border border-indigo-300/30">
               <Shield className="w-3 h-3 text-emerald-300" />
               <span>Autentikasi Portal GTK</span>
