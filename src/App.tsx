@@ -33,6 +33,10 @@ import { StudentDetailModal } from './components/StudentDetailModal';
 import { DaftarMenuModal } from './components/DaftarMenuModal';
 import { LoginView } from './components/LoginView';
 import { isTabPermitted, getFirstPermittedTab } from './data/menuList';
+import { 
+  getGTKAllowedDownloadHeaders, 
+  fetchGTKAllowedDownloadHeadersFromServer 
+} from './data/gtkDownloadColumns';
 
 export default function App() {
   const [students, setStudents] = useState<Student[]>(() => {
@@ -102,6 +106,17 @@ export default function App() {
       }
     } catch {}
   };
+  const [allowedGtkHeaders, setAllowedGtkHeaders] = useState<string[]>(() => getGTKAllowedDownloadHeaders());
+
+  // Sinkronisasi allowed GTK download headers dari server terpusat
+  useEffect(() => {
+    fetchGTKAllowedDownloadHeadersFromServer().then((headers) => {
+      if (headers && headers.length > 0) {
+        setAllowedGtkHeaders(headers);
+      }
+    });
+  }, [currentUser]);
+
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [theme, setTheme] = useState<AppTheme>(() => {
     return safeGetItem<AppTheme>('dapodik_app_theme', 'aurora-glass');
@@ -575,6 +590,8 @@ export default function App() {
               jurusanList={jurusanList}
               webAppUrl={appConfig.webAppUrl}
               currentUser={currentUser}
+              allowedGtkHeaders={allowedGtkHeaders}
+              onUpdateAllowedGtkHeaders={setAllowedGtkHeaders}
               onAddStudent={() => {
                 setEditingStudent(null);
                 setIsFormModalOpen(true);
