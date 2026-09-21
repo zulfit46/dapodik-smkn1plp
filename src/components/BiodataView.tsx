@@ -25,7 +25,8 @@ import { isUserRole } from '../utils/authUtils';
 import { 
   ALL_DOWNLOAD_COLUMNS, 
   getGTKAllowedDownloadHeaders,
-  DEFAULT_GTK_ALLOWED_DOWNLOAD_HEADERS 
+  DEFAULT_GTK_ALLOWED_DOWNLOAD_HEADERS,
+  fetchGTKAllowedDownloadHeadersFromServer
 } from '../data/gtkDownloadColumns';
 import { GTKDownloadHeadersModal } from './GTKDownloadHeadersModal';
 
@@ -36,6 +37,8 @@ interface BiodataViewProps {
   jurusanList?: Jurusan[];
   webAppUrl?: string;
   currentUser?: GTKData | null;
+  allowedGtkHeaders?: string[];
+  onUpdateAllowedGtkHeaders?: (keys: string[]) => void;
   onAddStudent: () => void;
   onEditStudent: (student: Student) => void;
   onDeleteStudent: (id: string) => void;
@@ -51,6 +54,8 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
   jurusanList = INITIAL_JURUSAN_LIST,
   webAppUrl,
   currentUser,
+  allowedGtkHeaders: propAllowedGtkHeaders,
+  onUpdateAllowedGtkHeaders,
   onAddStudent,
   onEditStudent,
   onDeleteStudent,
@@ -70,10 +75,37 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // Allowed GTK Download Headers state (managed by Admin)
-  const [allowedGtkHeaders, setAllowedGtkHeaders] = useState<string[]>(() => getGTKAllowedDownloadHeaders());
+  // Allowed GTK Download Headers state (managed by Admin, synchronized with server)
+  const [allowedGtkHeaders, setAllowedGtkHeaders] = useState<string[]>(() => {
+    return propAllowedGtkHeaders && propAllowedGtkHeaders.length > 0
+      ? propAllowedGtkHeaders
+      : getGTKAllowedDownloadHeaders();
+  });
   const [isGtkHeadersModalOpen, setIsGtkHeadersModalOpen] = useState(false);
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+
+  // Sync if prop from parent updates
+  React.useEffect(() => {
+    if (propAllowedGtkHeaders && propAllowedGtkHeaders.length > 0) {
+      setAllowedGtkHeaders(propAllowedGtkHeaders);
+    }
+  }, [propAllowedGtkHeaders]);
+
+  // Always fetch latest allowed download headers from server on mount
+  React.useEffect(() => {
+    let isMounted = true;
+    fetchGTKAllowedDownloadHeadersFromServer().then((headers) => {
+      if (isMounted && headers && headers.length > 0) {
+        setAllowedGtkHeaders(headers);
+        if (onUpdateAllowedGtkHeaders) {
+          onUpdateAllowedGtkHeaders(headers);
+        }
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Column visibility state (default all 11 columns visible for Admin)
   const [visibleColumns, setVisibleColumns] = useState({
@@ -723,6 +755,9 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
           currentAllowedKeys={allowedGtkHeaders}
           onSaveSuccess={(updatedKeys) => {
             setAllowedGtkHeaders(updatedKeys);
+            if (onUpdateAllowedGtkHeaders) {
+              onUpdateAllowedGtkHeaders(updatedKeys);
+            }
           }}
         />
       )}
