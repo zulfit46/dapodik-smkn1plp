@@ -25,6 +25,7 @@ interface GTKDownloadHeadersModalProps {
   onClose: () => void;
   currentAllowedKeys: string[];
   onSaveSuccess: (updatedKeys: string[]) => void;
+  webAppUrl?: string;
 }
 
 export const GTKDownloadHeadersModal: React.FC<GTKDownloadHeadersModalProps> = ({
@@ -32,6 +33,7 @@ export const GTKDownloadHeadersModal: React.FC<GTKDownloadHeadersModalProps> = (
   onClose,
   currentAllowedKeys,
   onSaveSuccess,
+  webAppUrl,
 }) => {
   const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
     return currentAllowedKeys.length > 0 
@@ -82,7 +84,7 @@ export const GTKDownloadHeadersModal: React.FC<GTKDownloadHeadersModalProps> = (
 
   const handleSave = async () => {
     setIsSaving(true);
-    await syncGTKAllowedDownloadHeadersToServer(selectedKeys);
+    await syncGTKAllowedDownloadHeadersToServer(selectedKeys, webAppUrl);
     onSaveSuccess(selectedKeys);
     setIsSaving(false);
     setSaveToast(true);
