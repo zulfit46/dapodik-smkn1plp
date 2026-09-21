@@ -106,16 +106,38 @@ export default function App() {
       }
     } catch {}
   };
+
+  const [appConfig, setAppConfig] = useState<AppConfig>(() => {
+    return safeGetItem<AppConfig>('dapodik_app_config', {
+      spreadsheetId: '1t_i5_kMDb00AT2uL0Km49_37CHJB2RWUv3tZjVgLlAk',
+      sheetName: 'data',
+      webAppUrl: 'https://script.google.com/macros/s/AKfycbxwfqpqePmp5mtpzeJSTHpiz0PxyqSbOA3hWw1Zy8Iofvi1lMIWxYeMllDNlmP-8RI/exec',
+      autoSync: false,
+      lastSyncedAt: null
+    });
+  });
+
   const [allowedGtkHeaders, setAllowedGtkHeaders] = useState<string[]>(() => getGTKAllowedDownloadHeaders());
 
-  // Sinkronisasi allowed GTK download headers dari server terpusat
+  // Sinkronisasi allowed GTK download headers dari server terpusat & Google Apps Script
   useEffect(() => {
-    fetchGTKAllowedDownloadHeadersFromServer().then((headers) => {
+    fetchGTKAllowedDownloadHeadersFromServer(appConfig.webAppUrl).then((headers) => {
       if (headers && headers.length > 0) {
         setAllowedGtkHeaders(headers);
       }
     });
-  }, [currentUser]);
+
+    const handleCustomUpdate = (e: any) => {
+      if (e.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+        setAllowedGtkHeaders(e.detail);
+      }
+    };
+
+    window.addEventListener('gtk_download_headers_updated', handleCustomUpdate);
+    return () => {
+      window.removeEventListener('gtk_download_headers_updated', handleCustomUpdate);
+    };
+  }, [currentUser, appConfig.webAppUrl]);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [theme, setTheme] = useState<AppTheme>(() => {
@@ -146,16 +168,6 @@ export default function App() {
 
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [viewingStudent, setViewingStudent] = useState<Student | null>(null);
-
-  const [appConfig, setAppConfig] = useState<AppConfig>(() => {
-    return safeGetItem<AppConfig>('dapodik_app_config', {
-      spreadsheetId: '1t_i5_kMDb00AT2uL0Km49_37CHJB2RWUv3tZjVgLlAk',
-      sheetName: 'data',
-      webAppUrl: 'https://script.google.com/macros/s/AKfycbxwfqpqePmp5mtpzeJSTHpiz0PxyqSbOA3hWw1Zy8Iofvi1lMIWxYeMllDNlmP-8RI/exec',
-      autoSync: false,
-      lastSyncedAt: null
-    });
-  });
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
