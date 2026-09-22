@@ -63,6 +63,7 @@ interface MutasiViewProps {
   currentUser?: GTKData | null;
   appConfig?: AppConfig;
   onAddStudentToActive?: (student: Student) => void;
+  onUpdateStudentStatus?: (nisn: string, nipd: string, nama: string, status: string, ket: string) => Promise<any> | void;
 }
 
 const API_WILAYAH = "https://www.emsifa.com/api-wilayah-indonesia/api";
@@ -168,7 +169,8 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
   waliKelasList = [],
   currentUser,
   appConfig,
-  onAddStudentToActive
+  onAddStudentToActive,
+  onUpdateStudentStatus
 }) => {
   // Role detection:
   const isUser = isUserRole(currentUser);
@@ -918,13 +920,16 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Searchable Active Students for Mutasi Keluar Auto-fill
+  // Searchable Active Students for Mutasi Keluar Auto-fill (hanya siswa aktif)
   const matchingStudents = useMemo(() => {
+    const activeStudents = students.filter(
+      s => !s.status || s.status.toLowerCase().trim() !== 'tidak aktif'
+    );
     const q = studentSearchQuery.trim().toLowerCase();
     if (!q) {
-      return students.slice(0, 15);
+      return activeStudents.slice(0, 15);
     }
-    return students.filter(s => {
+    return activeStudents.filter(s => {
       const matchNama = (s.nama || '').toLowerCase().includes(q);
       const matchNisn = (s.nisn || '').includes(q);
       const matchNipd = (s.nipd || '').toLowerCase().includes(q);
@@ -1075,6 +1080,22 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
     setMutasiKeluarList(updatedList);
     safeSetItem('dapodik_cached_mutasi_keluar', updatedList);
 
+    // Otomatis ubah status siswa menjadi 'Tidak Aktif' dan header ket di sheet data
+    // terisi sesuai yang diinput di form mutasi keluar (Mutasi, Mengundurkan Diri, dsb.)
+    if (onUpdateStudentStatus && (targetItem.nisn || targetItem.nipd || targetItem.nama)) {
+      try {
+        await onUpdateStudentStatus(
+          targetItem.nisn,
+          targetItem.nipd,
+          targetItem.nama,
+          'Tidak Aktif',
+          targetItem.ketMutasi || 'Mutasi'
+        );
+      } catch (stuErr) {
+        console.warn('Gagal otomatis memperbarui status siswa menjadi Tidak Aktif:', stuErr);
+      }
+    }
+
     // Sync directly to Google Sheets sheet "mutasi_keluar"
     try {
       const saveRes = await saveMutasiKeluarDirectly(appConfig?.webAppUrl || '', targetItem, !!editingKeluarItem);
@@ -1094,10 +1115,10 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
 
     setNotification({
       type: 'success',
-      title: 'Berhasil Simpan Data',
+      title: 'Berhasil Simpan Mutasi Keluar',
       message: editingKeluarItem
-        ? `Data mutasi keluar siswa "${targetItem.nama}" berhasil diperbarui di spreadsheet.`
-        : `Data mutasi keluar siswa "${targetItem.nama}" berhasil disimpan di sheet mutasi_keluar.`
+        ? `Data mutasi keluar siswa "${targetItem.nama}" berhasil diperbarui. Status siswa diatur Tidak Aktif (${targetItem.ketMutasi || 'Mutasi'}).`
+        : `Data mutasi keluar siswa "${targetItem.nama}" berhasil disimpan. Siswa otomatis dinonaktifkan di sheet data (status: Tidak Aktif, ket: ${targetItem.ketMutasi || 'Mutasi'}) dan tidak lagi ditampilkan di daftar absen.`
     });
     setTimeout(() => setNotification(null), 4500);
   };
@@ -1121,6 +1142,21 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
     const updatedList = mutasiKeluarList.filter(m => m.id !== itemToDelete.id);
     setMutasiKeluarList(updatedList);
     safeSetItem('dapodik_cached_mutasi_keluar', updatedList);
+
+    // Otomatis kembalikan status siswa menjadi 'Aktif' dan keterangan dikosongkan
+    if (onUpdateStudentStatus && (itemToDelete.nisn || itemToDelete.nipd || itemToDelete.nama)) {
+      try {
+        await onUpdateStudentStatus(
+          itemToDelete.nisn,
+          itemToDelete.nipd,
+          itemToDelete.nama,
+          'Aktif',
+          ''
+        );
+      } catch (stuErr) {
+        console.warn('Gagal mengembalikan status siswa menjadi Aktif:', stuErr);
+      }
+    }
 
     try {
       await deleteMutasiKeluarDirectly(appConfig?.webAppUrl || '', {
