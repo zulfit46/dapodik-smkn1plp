@@ -121,6 +121,8 @@ export function normalizeStudent(s: any): Student {
     kerja_ibu: pekerjaanIbu || s.kerja_ibu || '',
     nama_ayah: ayah || s.nama_ayah || '',
     nama_ibu: ibu || s.nama_ibu || '',
+    status: s.status !== undefined && s.status !== null && String(s.status).trim() ? String(s.status).trim() : 'Aktif',
+    ket: s.ket !== undefined && s.ket !== null ? String(s.ket).trim() : '',
   };
 }
 
