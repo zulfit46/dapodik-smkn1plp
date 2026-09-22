@@ -692,13 +692,19 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
                         {/* 15. Status */}
                         {isColVisible('status') && (
                           <td className="py-2.5 px-3 text-slate-800 border-r border-slate-200">
-                            <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                              (student.status || '').toLowerCase().includes('aktif')
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}>
-                              {student.status || 'Aktif'}
-                            </span>
+                            {(() => {
+                              const st = (student.status || 'Aktif').trim();
+                              const isInactive = st.toLowerCase().includes('tidak') || st.toLowerCase() === 'mutasi' || st.toLowerCase() === 'keluar';
+                              return (
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${
+                                  isInactive
+                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                }`}>
+                                  {st}
+                                </span>
+                              );
+                            })()}
                           </td>
                         )}
 
