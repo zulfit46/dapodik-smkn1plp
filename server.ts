@@ -1670,6 +1670,34 @@ async function startServer() {
 
       console.log(`[Mutasi Keluar Save] Mengirim data NISN ${gasPayload.item.nisn} ke Google Sheets...`);
       const gasRes = await sendToGas(targetWebAppUrl, gasPayload, 30000);
+
+      // Otomatis update status siswa di memori server menjadi "Tidak Aktif" dan ket sesuai mutasi
+      const targetNisn = String(item.nisn || "").trim();
+      const targetNipd = String(item.nipd || "").trim();
+      const targetNama = String(item.nama || "").trim().toLowerCase();
+      const targetKet = String(item.ketMutasi || item.ket_mutasi || "Mutasi").trim();
+
+      const updateStudentInactive = (s: any) => {
+        const isMatch = (targetNisn && s.nisn === targetNisn) ||
+                        (targetNipd && s.nipd === targetNipd) ||
+                        (targetNama && s.nama?.trim().toLowerCase() === targetNama);
+        if (isMatch) {
+          return {
+            ...s,
+            status: "Tidak Aktif",
+            ket: targetKet
+          };
+        }
+        return s;
+      };
+
+      if (Array.isArray(cachedSheetsData)) {
+        cachedSheetsData = cachedSheetsData.map(updateStudentInactive);
+      }
+      if (Array.isArray(studentList)) {
+        studentList = studentList.map(updateStudentInactive);
+      }
+
       return res.json({
         status: "success",
         message: "Data mutasi keluar berhasil disimpan ke Google Sheets (sheet: mutasi_keluar)",
@@ -1706,6 +1734,22 @@ async function startServer() {
           }))
         };
         const gasRes = await sendToGas(targetWebAppUrl, gasPayload, 45000);
+
+        // Revert status siswa di server cache
+        const revertStudent = (s: any) => {
+          const match = items.some((it: any) => {
+            const tNisn = String(it.nisn || "").trim();
+            const tNipd = String(it.nipd || "").trim();
+            return (tNisn && s.nisn === tNisn) || (tNipd && s.nipd === tNipd);
+          });
+          if (match) {
+            return { ...s, status: "Aktif", ket: "" };
+          }
+          return s;
+        };
+        if (Array.isArray(cachedSheetsData)) cachedSheetsData = cachedSheetsData.map(revertStudent);
+        if (Array.isArray(studentList)) studentList = studentList.map(revertStudent);
+
         return res.json({
           status: "success",
           message: `Berhasil menghapus ${items.length} data mutasi keluar beserta berkas terkait di Google Drive`,
@@ -1724,6 +1768,19 @@ async function startServer() {
           }
         };
         const gasRes = await sendToGas(targetWebAppUrl, gasPayload, 30000);
+
+        // Revert status siswa di server cache
+        const tNisn = String(item.nisn || "").trim();
+        const tNipd = String(item.nipd || "").trim();
+        const revertSingleStudent = (s: any) => {
+          if ((tNisn && s.nisn === tNisn) || (tNipd && s.nipd === tNipd)) {
+            return { ...s, status: "Aktif", ket: "" };
+          }
+          return s;
+        };
+        if (Array.isArray(cachedSheetsData)) cachedSheetsData = cachedSheetsData.map(revertSingleStudent);
+        if (Array.isArray(studentList)) studentList = studentList.map(revertSingleStudent);
+
         return res.json({
           status: "success",
           message: `Data mutasi keluar dan berkas terkait berhasil dihapus`,
