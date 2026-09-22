@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Student, Jurusan } from '../types';
 import { Printer, Download, ChevronDown, Check } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -69,16 +69,28 @@ export const RekapView: React.FC<RekapViewProps> = ({
   // Standard religions list matching screenshot
   const religions = ['Islam', 'Kristen', 'Katholik', 'Hindu', 'Budha', 'Khonghucu'];
 
-  // Total student counts
-  const totalSiswa = students.length;
-  const totalLaki = students.filter((s) => s.jk === 'L').length;
-  const totalPerempuan = students.filter((s) => s.jk === 'P').length;
+  // Rekapitulasi peserta didik hanya menghitung siswa yang berstatus Aktif
+  // Siswa mutasi keluar / mengundurkan diri (Tidak Aktif) otomatis berkurang dari rekap
+  const activeStudents = useMemo(() => {
+    return students.filter((s) => {
+      const st = (s.status || '').toLowerCase().trim();
+      if (st === 'tidak aktif' || st.includes('tidak') || st === 'mutasi' || st === 'keluar' || st === 'mengundurkan diri') {
+        return false;
+      }
+      return true;
+    });
+  }, [students]);
+
+  // Total student counts (hanya siswa aktif)
+  const totalSiswa = activeStudents.length;
+  const totalLaki = activeStudents.filter((s) => s.jk === 'L').length;
+  const totalPerempuan = activeStudents.filter((s) => s.jk === 'P').length;
 
   // Agama total counts overall
   const religionTotals: Record<string, number> = {};
   religions.forEach((r) => (religionTotals[r] = 0));
 
-  students.forEach((s) => {
+  activeStudents.forEach((s) => {
     let agm = (s.agama || '').trim();
     if (agm === 'Buddha') agm = 'Budha';
     if (agm) {
@@ -88,7 +100,7 @@ export const RekapView: React.FC<RekapViewProps> = ({
 
   // Standard Age Categories for Secondary/Vocational School (SMK)
   const standardAgeCategories = ['< 15 Thn', '15 Thn', '16 Thn', '17 Thn', '18 Thn', '19 Thn', '≥ 20 Thn'];
-  const hasUnknownAge = students.some((s) => calculateStudentAge(s.tanggalLahir) === null);
+  const hasUnknownAge = activeStudents.some((s) => calculateStudentAge(s.tanggalLahir) === null);
   const activeAgeCategories = hasUnknownAge
     ? [...standardAgeCategories, 'Belum Ada Data']
     : standardAgeCategories;
@@ -116,7 +128,7 @@ export const RekapView: React.FC<RekapViewProps> = ({
   const levelJurusanMap: Record<string, Record<string, ProgramKeahlianSummary>> = {};
   const overallJurusanMap: Record<string, ProgramKeahlianSummary> = {};
 
-  students.forEach((student) => {
+  activeStudents.forEach((student) => {
     const rawClass = (student.kelas || '').trim();
     let levelName = 'Lainnya';
     const numMatch = rawClass.match(/^(\d+)/);
@@ -245,7 +257,7 @@ export const RekapView: React.FC<RekapViewProps> = ({
   // Aggregate by Rombel (10 AKL 1, 10 AKL 2, etc.)
   const classMap: Record<string, ClassSummary> = {};
 
-  students.forEach((student) => {
+  activeStudents.forEach((student) => {
     const cls = (student.kelas || 'Lainnya').trim();
     if (!classMap[cls]) {
       classMap[cls] = { total: 0, laki: 0, perempuan: 0, agamaMap: {}, ageMap: {} };
