@@ -1729,66 +1729,70 @@ export async function uploadMutasiBerkasToDrive(
     };
   }
 
-  // 1. Prioritize Express Server API (/api/mutasi/upload-berkas)
+  const isStaticHost = typeof window !== 'undefined' && (
+    window.location.hostname.includes('vercel.app') ||
+    window.location.hostname.includes('netlify.app') ||
+    window.location.hostname.includes('github.io') ||
+    window.location.hostname.includes('pages.dev')
+  );
+
+  // 1. Prioritize Express Server API (/api/mutasi/upload-berkas) ONLY if not on a static hosting environment
   let backendErrorMessage = '';
   let backendErrorCode = '';
-  try {
-    const res = await fetch('/api/mutasi/upload-berkas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        base64Data,
-        fileName: targetFileName,
-        mimeType: file.type || 'application/pdf',
-        folderId: DRIVE_FOLDER_ID_MUTASI_KELUAR,
-        nisn,
-        nama,
-        oldFileUrl: oldFileUrl || ''
-      }),
-      signal: AbortSignal.timeout(65000)
-    });
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data.status === 'success' && data.fileUrl) {
-        return {
-          success: true,
-          fileUrl: data.fileUrl,
-          fileName: data.fileName || targetFileName,
-          fileId: data.fileId,
-          message: data.message || 'Berkas berhasil diupload ke Google Drive'
-        };
+  if (!isStaticHost) {
+    try {
+      const res = await fetch('/api/mutasi/upload-berkas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          base64Data,
+          fileName: targetFileName,
+          mimeType: file.type || 'application/pdf',
+          folderId: DRIVE_FOLDER_ID_MUTASI_KELUAR,
+          nisn,
+          nama,
+          oldFileUrl: oldFileUrl || ''
+        }),
+        signal: AbortSignal.timeout(65000)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success' && data.fileUrl) {
+          return {
+            success: true,
+            fileUrl: data.fileUrl,
+            fileName: data.fileName || targetFileName,
+            fileId: data.fileId,
+            message: data.message || 'Berkas berhasil diupload ke Google Drive'
+          };
+        } else {
+          throw new Error(data.message || 'Respon server gagal');
+        }
+      } else if (res.status === 404 || res.status === 405) {
+        // HTTP 404 or 405 means static host or backend route not implemented; seamlessly fallback to direct GAS
+        console.warn(`Backend API returned HTTP ${res.status} (likely static host/Vercel). Falling back directly to Google Apps Script...`);
       } else {
-        throw new Error(data.message || 'Respon server gagal');
+        const errData = await res.json().catch(() => null);
+        backendErrorCode = errData?.code || '';
+        backendErrorMessage = errData?.message || '';
+        if (backendErrorCode === 'NEED_DRIVE_PERMISSION') {
+          return {
+            success: false,
+            code: 'NEED_DRIVE_PERMISSION',
+            message: backendErrorMessage || 'Izin Google Drive belum diaktifkan.'
+          };
+        }
       }
-    } else {
-      const errData = await res.json().catch(() => null);
-      backendErrorCode = errData?.code || '';
-      backendErrorMessage = errData?.message || `Server merespons error ${res.status}`;
-      throw new Error(backendErrorMessage);
+    } catch (backendErr: any) {
+      console.warn('Upload via Express server failed or offline, checking direct Google Apps Script fallback...', backendErr);
     }
-  } catch (backendErr: any) {
-    if (!backendErrorMessage) {
-      backendErrorMessage = backendErr?.message || '';
-    }
-    console.warn('Upload via Express server failed or offline, checking fallback...', backendErr);
   }
 
-  // If backend responded with an error (including permission error or GAS error), return it directly
-  if (backendErrorMessage) {
-    const isPermission = backendErrorCode === 'NEED_DRIVE_PERMISSION' ||
-      backendErrorMessage.toLowerCase().includes('izin') ||
-      backendErrorMessage.toLowerCase().includes('permission') ||
-      backendErrorMessage.toLowerCase().includes('driveapp');
-    return {
-      success: false,
-      code: isPermission ? 'NEED_DRIVE_PERMISSION' : (backendErrorCode || 'ERROR'),
-      message: backendErrorMessage
-    };
-  }
-
-  // 2. Direct Web App URL fallback (if backend is not handling or static deploy)
-  if (webAppUrl) {
+  // 2. Direct Web App URL fallback (standard for Vercel / static deploy)
+  const targetGasUrl = webAppUrl || 'https://script.google.com/macros/s/AKfycbxwfqpqePmp5mtpzeJSTHpiz0PxyqSbOA3hWw1Zy8Iofvi1lMIWxYeMllDNlmP-8RI/exec';
+  if (targetGasUrl) {
     try {
       const gasPayload = {
         action: 'uploadBerkasMutasi',
@@ -1800,7 +1804,7 @@ export async function uploadMutasiBerkasToDrive(
         oldFileUrl: oldFileUrl || ''
       };
 
-      const res = await fetch(webAppUrl, {
+      const res = await fetch(targetGasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(gasPayload),
@@ -1809,8 +1813,14 @@ export async function uploadMutasiBerkasToDrive(
 
       if (res.ok) {
         const text = await res.text();
-        const parsed = JSON.parse(text);
-        if (parsed.status === 'success' && parsed.fileUrl) {
+        let parsed: any;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          parsed = null;
+        }
+
+        if (parsed && parsed.status === 'success' && parsed.fileUrl) {
           return {
             success: true,
             fileUrl: parsed.fileUrl,
@@ -1818,21 +1828,29 @@ export async function uploadMutasiBerkasToDrive(
             fileId: parsed.fileId,
             message: 'Berkas berhasil diupload langsung ke Google Drive'
           };
-        } else if (parsed.message) {
+        } else if (parsed && parsed.message) {
+          const isPermission = String(parsed.message).toLowerCase().includes('permission') ||
+            String(parsed.message).toLowerCase().includes('izin') ||
+            String(parsed.message).toLowerCase().includes('driveapp');
           return {
             success: false,
+            code: isPermission ? 'NEED_DRIVE_PERMISSION' : 'ERROR',
             message: parsed.message
           };
         }
       }
     } catch (gasErr: any) {
       console.warn('Direct Google Apps Script upload failed:', gasErr);
+      return {
+        success: false,
+        message: 'Gagal mengunggah berkas ke Google Drive: ' + (gasErr?.message || 'Koneksi terputus')
+      };
     }
   }
 
   return {
     success: false,
-    message: 'Gagal mengunggah berkas ke Google Drive folder ID: ' + DRIVE_FOLDER_ID_MUTASI_KELUAR + '. Pastikan koneksi internet aktif dan Web App URL telah diset.'
+    message: backendErrorMessage || ('Gagal mengunggah berkas ke Google Drive folder ID: ' + DRIVE_FOLDER_ID_MUTASI_KELUAR + '. Pastikan koneksi internet aktif dan Web App URL telah diset.')
   };
 }
 
