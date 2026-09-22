@@ -8,6 +8,7 @@ import {
   BookOpen, 
   Calendar, 
   UserCheck, 
+  UserMinus,
   Loader2,
   FileSpreadsheet
 } from 'lucide-react';
@@ -35,9 +36,15 @@ export const AbsenPDView: React.FC<AbsenPDViewProps> = ({
 }) => {
   const isUser = isUserRole(currentUser);
 
-  // Class list sorted naturally
+  // Class list sorted naturally (dari data siswa aktif)
   const uniqueClasses = useMemo(() => {
-    const classList = students.map((s) => s.kelas).filter((k): k is string => Boolean(k));
+    const classList = students
+      .filter((s) => {
+        const st = (s.status || '').toLowerCase().trim();
+        return !(st === 'tidak aktif' || st.includes('tidak') || st === 'mutasi' || st === 'keluar' || st === 'mengundurkan diri');
+      })
+      .map((s) => s.kelas)
+      .filter((k): k is string => Boolean(k));
     const set = new Set<string>(classList);
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
   }, [students]);
@@ -68,10 +75,17 @@ export const AbsenPDView: React.FC<AbsenPDViewProps> = ({
     return agama.substring(0, 2);
   };
 
-  // Filter students based on selected class and search query
+  // Filter students based on selected class and search query (Hanya siswa aktif yang ditampilkan di daftar absen)
   const filteredStudents = useMemo(() => {
     return students
       .filter((s) => {
+        // Otomatis tidak ditampilkan di absen jika status Tidak Aktif (mutasi keluar, mengundurkan diri, dsb.)
+        const st = (s.status || '').toLowerCase().trim();
+        const isTidakAktif = st === 'tidak aktif' || st.includes('tidak') || st === 'mutasi' || st === 'keluar' || st === 'mengundurkan diri';
+        if (isTidakAktif) {
+          return false;
+        }
+
         const matchKelas = selectedKelas === 'Semua' || s.kelas === selectedKelas;
         const query = searchQuery.toLowerCase().trim();
         const matchQuery =
@@ -86,6 +100,12 @@ export const AbsenPDView: React.FC<AbsenPDViewProps> = ({
 
   // Metadata for the currently selected class
   const classMetadata = useMemo(() => {
+    // Hitung siswa tidak aktif / mutasi di kelas ini
+    const inactiveCount = students.filter(
+      (s) => (selectedKelas === 'Semua' || s.kelas === selectedKelas) &&
+             s.status && s.status.toLowerCase().trim() === 'tidak aktif'
+    ).length;
+
     if (selectedKelas === 'Semua') {
       return {
         programKeahlian: 'Semua Program Keahlian',
@@ -93,7 +113,8 @@ export const AbsenPDView: React.FC<AbsenPDViewProps> = ({
         waliKelas: null,
         totalL: filteredStudents.filter((s) => s.jk === 'L').length,
         totalP: filteredStudents.filter((s) => s.jk === 'P').length,
-        total: filteredStudents.length
+        total: filteredStudents.length,
+        totalInactive: inactiveCount
       };
     }
 
@@ -112,14 +133,19 @@ export const AbsenPDView: React.FC<AbsenPDViewProps> = ({
       waliKelas: wali || null,
       totalL: filteredStudents.filter((s) => s.jk === 'L').length,
       totalP: filteredStudents.filter((s) => s.jk === 'P').length,
-      total: filteredStudents.length
+      total: filteredStudents.length,
+      totalInactive: inactiveCount
     };
-  }, [selectedKelas, jurusanList, waliKelasList, filteredStudents]);
+  }, [selectedKelas, jurusanList, waliKelasList, filteredStudents, students]);
 
-  // PDF Page Generator (Official SMKN 1 Palopo attendance sheet format)
+  // PDF Page Generator (Official SMKN 1 Palopo attendance sheet format - hanya siswa aktif)
   const renderAbsenPage = (doc: jsPDF, kelasTarget: string) => {
     const classStudents = students
-      .filter((s) => s.kelas === kelasTarget)
+      .filter((s) => {
+        if (s.kelas !== kelasTarget) return false;
+        const st = (s.status || '').toLowerCase().trim();
+        return !(st === 'tidak aktif' || st.includes('tidak') || st === 'mutasi' || st === 'keluar' || st === 'mengundurkan diri');
+      })
       .sort((a, b) => (a.nama || '').localeCompare(b.nama || ''));
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -510,10 +536,18 @@ export const AbsenPDView: React.FC<AbsenPDViewProps> = ({
                 Wali Kelas: <strong>{classMetadata.waliKelas.nama}</strong> (NIP. {classMetadata.waliKelas.nip || '-'})
               </span>
             )} */}
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 font-semibold border border-emerald-100 ml-auto">
-              <Users className="w-3.5 h-3.5 text-emerald-600" />
-              Total: {classMetadata.total} Siswa ({classMetadata.totalL} L, {classMetadata.totalP} P)
-            </span>
+            <div className="flex items-center gap-2 flex-wrap ml-auto">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 font-semibold border border-emerald-100">
+                <Users className="w-3.5 h-3.5 text-emerald-600" />
+                Total: {classMetadata.total} Siswa Aktif ({classMetadata.totalL} L, {classMetadata.totalP} P)
+              </span>
+              {classMetadata.totalInactive > 0 && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-[11px] font-medium border border-amber-200" title="Siswa dengan status Tidak Aktif (mutasi keluar/mengundurkan diri) otomatis tidak disertakan dalam lembar absen">
+                  <UserMinus className="w-3.5 h-3.5 text-amber-600" />
+                  {classMetadata.totalInactive} siswa mutasi keluar/tidak aktif
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>
