@@ -48,8 +48,8 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
   const [authError, setAuthError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
-  // Table Filters & Search
-  const [selectedStatus, setSelectedStatus] = useState('Semua');
+  // Table Filters & Search (Default 'Aktif' agar siswa yang Tidak Aktif / Mutasi otomatis tidak tampil)
+  const [selectedStatus, setSelectedStatus] = useState('Aktif');
   const [searchTerm, setSearchTerm] = useState('');
   
   // Local edit states for status and ket
