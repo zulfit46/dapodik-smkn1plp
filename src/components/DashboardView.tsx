@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Student, ActiveTab, AppTheme } from '../types';
 import { 
   Smile, 
@@ -69,11 +69,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   theme = 'aurora-glass'
 }) => {
   const isGlass = theme === 'aurora-glass';
-  const totalSiswa = students.length;
-  const totalLaki = students.filter((s) => s.jk === 'L').length;
-  const totalPerempuan = students.filter((s) => s.jk === 'P').length;
 
-  const classCounts = students.reduce((acc, s) => {
+  // Selaras dengan Rekapitulasi: Hanya menghitung peserta didik yang berstatus Aktif
+  // Siswa mutasi keluar / mengundurkan diri (Tidak Aktif) otomatis berkurang dari dashboard
+  const activeStudents = useMemo(() => {
+    return students.filter((s) => {
+      const st = (s.status || '').toLowerCase().trim();
+      if (st === 'tidak aktif' || st.includes('tidak') || st === 'mutasi' || st === 'keluar' || st === 'mengundurkan diri') {
+        return false;
+      }
+      return true;
+    });
+  }, [students]);
+
+  const totalSiswa = activeStudents.length;
+  const totalLaki = activeStudents.filter((s) => s.jk === 'L').length;
+  const totalPerempuan = activeStudents.filter((s) => s.jk === 'P').length;
+
+  const classCounts = activeStudents.reduce((acc, s) => {
     const k = (s.kelas || '').trim();
     if (k) {
       acc[k] = (acc[k] || 0) + 1;
@@ -83,9 +96,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const totalRombel = Object.keys(classCounts).length;
 
-  // Distribusi tingkat kelas nyata sesuai data riil (tanpa estimasi persentase buatan)
+  // Distribusi tingkat kelas nyata sesuai data riil (hanya siswa aktif)
   const kelasCounts = { '10': 0, '11': 0, '12': 0, 'Lainnya': 0 };
-  students.forEach((s) => {
+  activeStudents.forEach((s) => {
     const lvl = parseGradeLevel(s.kelas);
     kelasCounts[lvl] = (kelasCounts[lvl] || 0) + 1;
   });
