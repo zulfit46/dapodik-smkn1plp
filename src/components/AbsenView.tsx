@@ -14,7 +14,9 @@ import {
   ShieldCheck, 
   ShieldAlert,
   School,
-  ArrowRight
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 interface AbsenViewProps {
@@ -51,6 +53,10 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
   // Table Filters & Search (Default 'Aktif' agar siswa yang Tidak Aktif / Mutasi otomatis tidak tampil)
   const [selectedStatus, setSelectedStatus] = useState('Aktif');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Pagination state (15 data per page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
   
   // Local edit states for status and ket
   const [statusState, setStatusState] = useState<{ [studentId: string]: string }>({});
@@ -356,6 +362,12 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
     return matchesStatus && matchesSearch;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / itemsPerPage));
+  const paginatedStudents = filteredStudents.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   const handleSave = async () => {
     setSavedSuccessMessage(null);
     setNoChangesNotice(false);
@@ -475,7 +487,10 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
                   type="text"
                   placeholder="Cari Nama / NISN / NIPD..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-300 text-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
@@ -495,7 +510,10 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Filter Status:</label>
               <select
                 value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
+                onChange={(e) => {
+                  setSelectedStatus(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="Semua">Semua Status</option>
@@ -576,7 +594,8 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredStudents.map((student, idx) => {
+                paginatedStudents.map((student, idx) => {
+                  const itemIndex = (currentPage - 1) * itemsPerPage + idx + 1;
                   const currentStatus = getStudentStatus(student);
                   const currentKet = getStudentKet(student);
                   const isAktif = currentStatus === 'Aktif';
@@ -591,7 +610,7 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
 
                   return (
                     <tr key={student.id ? `${student.id}-${idx}` : `stu-${idx}`} className={`${rowBgClass} transition-colors border-b border-slate-200`}>
-                      <td className="py-2.5 px-3 text-center text-slate-500 border-r border-slate-200">{idx + 1}</td>
+                      <td className="py-2.5 px-3 text-center text-slate-500 border-r border-slate-200">{itemIndex}</td>
                       <td className="py-2.5 px-3 font-medium text-slate-800 border-r border-slate-200">{student.nisn || '-'}</td>
                       <td className="py-2.5 px-3 font-medium text-slate-800 border-r border-slate-200">{student.nipd || '-'}</td>
                       <td className="py-2.5 px-4 font-semibold text-slate-800 border-r border-slate-200">{student.nama}</td>
@@ -655,14 +674,49 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
           </table>
         </div>
 
-        {/* Clean Footer Bar */}
-        <div className="p-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-600 flex items-center justify-between">
-          <span>
-            Total Siswa Terfilter ({targetKelas}): <strong className="text-slate-900">{filteredStudents.length}</strong> siswa
-          </span>
-          <span className="text-slate-500 text-[11px]">
-            Wali Kelas: <strong className="text-slate-700">{effectiveWali.nama}</strong>
-          </span>
+        {/* Pagination & Summary Footer Bar */}
+        <div className="p-3.5 bg-slate-50 border-t border-slate-200 text-xs text-slate-600 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span>
+              Menampilkan{' '}
+              <strong className="text-slate-900">
+                {filteredStudents.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}
+              </strong>
+              -
+              <strong className="text-slate-900">
+                {Math.min(currentPage * itemsPerPage, filteredStudents.length)}
+              </strong>{' '}
+              dari <strong className="text-slate-900">{filteredStudents.length}</strong> siswa (Kelas {targetKelas})
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span>
+              Halaman <strong className="text-slate-900">{currentPage}</strong> dari{' '}
+              <strong className="text-slate-900">{totalPages}</strong>
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors shadow-2xs cursor-pointer"
+                title="Halaman Sebelumnya"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Prev</span>
+              </button>
+              <button
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages || filteredStudents.length === 0}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed font-semibold transition-colors shadow-2xs cursor-pointer"
+                title="Halaman Berikutnya"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
