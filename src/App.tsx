@@ -12,6 +12,7 @@ import { INITIAL_GTK_LIST } from './data/initialGTK';
 import { fetchStudentsDirectly, syncVervalDirectly, saveStudentDirectly, fetchGTKDirectly } from './services/sheetsSync';
 import { safeGetItem, safeSetItem } from './utils/storage';
 import { isUserRole } from './utils/authUtils';
+import { DAPO1_BASE64 } from './assets/dapo1Base64';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
@@ -118,6 +119,18 @@ export default function App() {
   });
 
   const [allowedGtkHeaders, setAllowedGtkHeaders] = useState<string[]>(() => getGTKAllowedDownloadHeaders());
+
+  // Pastikan logo favicon di tab browser selalu menggunakan logo yang sama dengan di sidebar
+  useEffect(() => {
+    const faviconUrl = DAPO1_BASE64 || '/dapo-1.png';
+    const link = (document.querySelector("link[rel*='icon']") as HTMLLinkElement) || document.createElement('link');
+    link.type = 'image/png';
+    link.rel = 'shortcut icon';
+    link.href = faviconUrl;
+    if (!document.head.contains(link)) {
+      document.head.appendChild(link);
+    }
+  }, []);
 
   // Sinkronisasi allowed GTK download headers dari server terpusat & Google Apps Script
   useEffect(() => {
@@ -657,6 +670,17 @@ export default function App() {
               onAddStudentToActive={(newStudent) => {
                 setStudents(prev => [newStudent, ...prev]);
                 safeSetItem('dapodik_cached_students', [newStudent, ...students]);
+              }}
+              onUpdateStudentStatus={async (nisn, nipd, nama, status, ket) => {
+                await handleSaveVerval([{
+                  id: nisn || nipd || nama,
+                  studentId: nisn || nipd || nama,
+                  nisn,
+                  nipd,
+                  nama,
+                  status,
+                  ket
+                }]);
               }}
             />
           )}
