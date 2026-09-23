@@ -189,9 +189,9 @@ export const ALL_DOWNLOAD_COLUMNS: DownloadColumnDefinition[] = [
     label: 'Status Siswa (Aktif/Tidak)',
     description: 'Status keaktifan peserta didik di Dapodik',
     category: 'Akademik & Lainnya',
-    defaultAllowedForGTK: false,
+    defaultAllowedForGTK: true,
     excelWidth: 14,
-    getValue: (s) => s.status || ''
+    getValue: (s) => s.status || 'Aktif'
   },
   {
     key: 'statusRegistrasi',
