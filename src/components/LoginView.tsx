@@ -66,26 +66,36 @@ export const LoginView: React.FC<LoginViewProps> = ({ gtkList, onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 flex items-center justify-center p-4 sm:p-6 antialiased">
-      {/* Background Decorative Glow */}
+    <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6 antialiased overflow-hidden">
+      {/* Background Image with Overlay */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700 transform scale-105"
+        style={{ backgroundImage: `url('/bg.png')` }}
+      />
+      {/* Gradient Dark/Vibrant Tint Overlay for Contrast & Readability */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-950/75 via-indigo-950/65 to-slate-900/80 backdrop-blur-[2px]" />
+
+      {/* Decorative Glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl" />
+        <div className="absolute -top-32 -right-32 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl" />
+        <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative w-full max-w-md">
-        {/* Card Header & Brand */}
-        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden">
+      <div className="relative w-full max-w-md z-10">
+        {/* Card Header & Brand with Glassmorphism */}
+        <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl shadow-indigo-950/40 border border-white/50 overflow-hidden transition-all duration-300">
           {/* Top Brand Banner */}
-          <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 p-6 text-white text-center relative">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-white p-1.5 shadow-lg mb-3 flex items-center justify-center">
+          <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-purple-700 p-6 text-white text-center relative overflow-hidden">
+            <div className="absolute inset-0 bg-white/5 opacity-50 backdrop-blur-3xs pointer-events-none" />
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-white p-1.5 shadow-xl mb-3 flex items-center justify-center transform hover:scale-105 transition-transform duration-300 ring-4 ring-white/20">
               <img
                 src={DAPO1_BASE64 || '/dapo-1.png'}
                 alt="Logo SMKN 1 Palopo"
                 className="w-full h-full object-contain"
               />
             </div>
-            <h1 className="text-xl font-bold tracking-tight">SMKN 1 PALOPO</h1>
+            <h1 className="text-xl font-extrabold tracking-wide drop-shadow-xs">SMKN 1 PALOPO</h1>
+            <p className="text-xs text-indigo-100 font-medium mt-0.5">Sistem Informasi Manajemen Sekolah</p>
           </div>
 
           {/* Form Content */}
