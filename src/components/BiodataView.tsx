@@ -526,30 +526,30 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
           )}
         </div>
 
-        {/* Data Table - Clean Grid Style */}
-        <div className="overflow-x-auto relative w-full">
-            <table className="w-full text-left text-xs border-collapse">
+        {/* Data Table - Clean Grid Style (Columns auto-fit content length) */}
+        <div className="overflow-x-auto relative w-full border border-slate-200 rounded-xl shadow-xs">
+            <table className="w-max min-w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-100 text-slate-800 font-semibold text-xs border-b border-slate-300">
-                  <th className="py-2.5 px-3 text-center w-12 border-r border-slate-300">No</th>
-                  {isColVisible('nama') && <th className="py-2.5 px-4 min-w-[160px] border-r border-slate-300 font-bold">Nama</th>}
-                  {isColVisible('kelas') && <th className="py-2.5 px-3 min-w-[90px] border-r border-slate-300">Kelas</th>}
-                  {isColVisible('nipd') && <th className="py-2.5 px-3 min-w-[90px] border-r border-slate-300">NIPD</th>}
-                  {isColVisible('nisn') && <th className="py-2.5 px-3 min-w-[100px] border-r border-slate-300">NISN</th>}
-                  {isColVisible('jk') && <th className="py-2.5 px-3 min-w-[60px] text-center border-r border-slate-300">JK</th>}
-                  {isColVisible('tempatLahir') && <th className="py-2.5 px-3 min-w-[110px] border-r border-slate-300">Tempat Lahir</th>}
-                  {isColVisible('tanggalLahir') && <th className="py-2.5 px-3 min-w-[110px] border-r border-slate-300">Tanggal Lahir</th>}
-                  {isColVisible('agama') && <th className="py-2.5 px-3 min-w-[80px] border-r border-slate-300">Agama</th>}
-                  {isColVisible('alamat') && <th className="py-2.5 px-4 min-w-[180px] border-r border-slate-300">Alamat</th>}
-                  {isColVisible('ayah') && <th className="py-2.5 px-3 min-w-[120px] border-r border-slate-300">Ayah</th>}
-                  {isColVisible('pekerjaanAyah') && <th className="py-2.5 px-3 min-w-[120px] border-r border-slate-300">Pekerjaan Ayah</th>}
-                  {isColVisible('ibu') && <th className="py-2.5 px-3 min-w-[120px] border-r border-slate-300">Ibu</th>}
-                  {isColVisible('pekerjaanIbu') && <th className="py-2.5 px-3 min-w-[120px] border-r border-slate-300">Pekerjaan Ibu</th>}
-                  {isColVisible('noHp') && <th className="py-2.5 px-3 min-w-[110px] border-r border-slate-300">No HP</th>}
-                  {isColVisible('email') && <th className="py-2.5 px-3 min-w-[130px] border-r border-slate-300">Email</th>}
-                  {isColVisible('sekolahAsal') && <th className="py-2.5 px-3 min-w-[130px] border-r border-slate-300">Sekolah Asal</th>}
-                  {isColVisible('status') && <th className="py-2.5 px-3 min-w-[90px] border-r border-slate-300">Status</th>}
-                  {isColVisible('ket') && <th className="py-2.5 px-3 min-w-[110px]">Keterangan</th>}
+                  <th className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-300">No</th>
+                  {isColVisible('nama') && <th className="py-2.5 px-4 whitespace-nowrap border-r border-slate-300 font-bold">Nama</th>}
+                  {isColVisible('kelas') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">Kelas</th>}
+                  {isColVisible('nipd') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">NIPD</th>}
+                  {isColVisible('nisn') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">NISN</th>}
+                  {isColVisible('jk') && <th className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-300">JK</th>}
+                  {isColVisible('tempatLahir') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">Tempat Lahir</th>}
+                  {isColVisible('tanggalLahir') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">Tanggal Lahir</th>}
+                  {isColVisible('agama') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">Agama</th>}
+                  {isColVisible('alamat') && <th className="py-2.5 px-4 whitespace-nowrap border-r border-slate-300">Alamat</th>}
+                  {isColVisible('ayah') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">Ayah</th>}
+                  {isColVisible('pekerjaanAyah') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">Pekerjaan Ayah</th>}
+                  {isColVisible('ibu') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">Ibu</th>}
+                  {isColVisible('pekerjaanIbu') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">Pekerjaan Ibu</th>}
+                  {isColVisible('noHp') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">No HP</th>}
+                  {isColVisible('email') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">Email</th>}
+                  {isColVisible('sekolahAsal') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">Sekolah Asal</th>}
+                  {isColVisible('status') && <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-300">Status</th>}
+                  {isColVisible('ket') && <th className="py-2.5 px-3 whitespace-nowrap">Keterangan</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white text-slate-800">
@@ -571,16 +571,16 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
                         key={student.id ? `${student.id}-${idx}` : `stu-${idx}`}
                         className="hover:bg-slate-50 transition-colors border-b border-slate-200"
                       >
-                        <td className="py-2.5 px-3 text-center text-slate-500 font-medium border-r border-slate-200">
+                        <td className="py-2.5 px-3 text-center text-slate-500 font-medium whitespace-nowrap border-r border-slate-200">
                           {itemIndex}
                         </td>
 
                         {/* 1. Nama */}
                         {isColVisible('nama') && (
-                          <td className="py-2.5 px-4 font-semibold text-slate-800 hover:text-indigo-600 transition-colors border-r border-slate-200">
+                          <td className="py-2.5 px-4 font-semibold text-slate-800 hover:text-indigo-600 transition-colors whitespace-nowrap border-r border-slate-200">
                             <button
                               onClick={() => onViewStudent(student)}
-                              className="text-left hover:underline focus:outline-hidden cursor-pointer"
+                              className="text-left hover:underline focus:outline-hidden cursor-pointer whitespace-nowrap block"
                             >
                               {student.nama}
                             </button>
@@ -589,35 +589,35 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
 
                         {/* 2. Kelas */}
                         {isColVisible('kelas') && (
-                          <td className="py-2.5 px-3 font-medium text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 font-medium text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.kelas}
                           </td>
                         )}
 
                         {/* 3. NIPD */}
                         {isColVisible('nipd') && (
-                          <td className="py-2.5 px-3 font-medium text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 font-medium text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.nipd}
                           </td>
                         )}
 
                         {/* 4. NISN */}
                         {isColVisible('nisn') && (
-                          <td className="py-2.5 px-3 font-medium text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 font-medium text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.nisn}
                           </td>
                         )}
 
                         {/* 5. JK */}
                         {isColVisible('jk') && (
-                          <td className="py-2.5 px-3 text-center font-medium text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 text-center font-medium text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.jk || '-'}
                           </td>
                         )}
 
                         {/* 6. Tempat Lahir */}
                         {isColVisible('tempatLahir') && (
-                          <td className="py-2.5 px-3 text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.tempatLahir || '-'}
                           </td>
                         )}
@@ -631,77 +631,77 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
 
                         {/* 8. Agama */}
                         {isColVisible('agama') && (
-                          <td className="py-2.5 px-3 text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.agama || '-'}
                           </td>
                         )}
 
                         {/* 9. Alamat */}
                         {isColVisible('alamat') && (
-                          <td className="py-2.5 px-4 text-slate-800 max-w-xs truncate border-r border-slate-200" title={student.alamat}>
+                          <td className="py-2.5 px-4 text-slate-800 whitespace-nowrap border-r border-slate-200" title={student.alamat}>
                             {student.alamat || '-'}
                           </td>
                         )}
 
                         {/* 10. Ayah */}
                         {isColVisible('ayah') && (
-                          <td className="py-2.5 px-3 text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.ayah || (student as any).nama_ayah || (student as any).namaayah || '-'}
                           </td>
                         )}
 
                         {/* 10b. Pekerjaan Ayah */}
                         {isColVisible('pekerjaanAyah') && (
-                          <td className="py-2.5 px-3 text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.pekerjaanAyah || (student as any).kerja_ayah || (student as any).kerjaayah || (student as any).pekerjaan_ayah || '-'}
                           </td>
                         )}
 
                         {/* 11. Ibu */}
                         {isColVisible('ibu') && (
-                          <td className="py-2.5 px-3 text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.ibu || (student as any).nama_ibu || (student as any).namaibu || '-'}
                           </td>
                         )}
 
                         {/* 11b. Pekerjaan Ibu */}
                         {isColVisible('pekerjaanIbu') && (
-                          <td className="py-2.5 px-3 text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.pekerjaanIbu || (student as any).kerja_ibu || (student as any).kerjaibu || (student as any).pekerjaan_ibu || '-'}
                           </td>
                         )}
 
                         {/* 12. No HP */}
                         {isColVisible('noHp') && (
-                          <td className="py-2.5 px-3 text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.noHp || '-'}
                           </td>
                         )}
 
                         {/* 13. Email */}
                         {isColVisible('email') && (
-                          <td className="py-2.5 px-3 text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.email || '-'}
                           </td>
                         )}
 
                         {/* 14. Sekolah Asal */}
                         {isColVisible('sekolahAsal') && (
-                          <td className="py-2.5 px-3 text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.sekolahAsal || '-'}
                           </td>
                         )}
 
                         {/* 15. Status (Tampilan Polosan tanpa highlight) */}
                         {isColVisible('status') && (
-                          <td className="py-2.5 px-3 text-slate-800 border-r border-slate-200">
+                          <td className="py-2.5 px-3 text-slate-800 whitespace-nowrap border-r border-slate-200">
                             {student.status || 'Aktif'}
                           </td>
                         )}
 
                         {/* 16. Keterangan */}
                         {isColVisible('ket') && (
-                          <td className="py-2.5 px-3 text-slate-800">
+                          <td className="py-2.5 px-3 text-slate-800 whitespace-nowrap">
                             {student.ket || '-'}
                           </td>
                         )}
