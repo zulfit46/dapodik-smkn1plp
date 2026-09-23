@@ -120,7 +120,7 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
     };
   }, [webAppUrl]);
 
-  // Column visibility state (default all 11 columns visible for Admin)
+  // Column visibility state (default all standard columns visible for Admin)
   const [visibleColumns, setVisibleColumns] = useState({
     nama: true,
     kelas: true,
@@ -135,6 +135,7 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
     pekerjaanAyah: true,
     ibu: true,
     pekerjaanIbu: true,
+    status: true,
   });
 
   const [showColumnToggle, setShowColumnToggle] = useState(false);
@@ -514,6 +515,8 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
                         ? 'Pekerjaan Ayah'
                         : colKey === 'pekerjaanIbu'
                         ? 'Pekerjaan Ibu'
+                        : colKey === 'status'
+                        ? 'Status'
                         : colKey}
                     </span>
                   </label>
@@ -689,22 +692,10 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
                           </td>
                         )}
 
-                        {/* 15. Status */}
+                        {/* 15. Status (Tampilan Polosan tanpa highlight) */}
                         {isColVisible('status') && (
                           <td className="py-2.5 px-3 text-slate-800 border-r border-slate-200">
-                            {(() => {
-                              const st = (student.status || 'Aktif').trim();
-                              const isInactive = st.toLowerCase().includes('tidak') || st.toLowerCase() === 'mutasi' || st.toLowerCase() === 'keluar';
-                              return (
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${
-                                  isInactive
-                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                }`}>
-                                  {st}
-                                </span>
-                              );
-                            })()}
+                            {student.status || 'Aktif'}
                           </td>
                         )}
 
