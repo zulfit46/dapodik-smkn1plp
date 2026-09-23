@@ -66,14 +66,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ gtkList, onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6 antialiased overflow-hidden">
-      {/* Background Image with Overlay */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700 transform scale-105"
-        style={{ backgroundImage: `url('/bg.png')` }}
+    <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6 antialiased overflow-hidden bg-slate-950">
+      {/* Background Image: Fit/Fill whole viewport completely without cropping */}
+      <img
+        src="/bg.png"
+        alt="Background Form Login SMKN 1 Palopo"
+        className="absolute inset-0 w-full h-full object-fill pointer-events-none select-none"
       />
-      {/* Gradient Dark/Vibrant Tint Overlay for Contrast & Readability */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-950/75 via-indigo-950/65 to-slate-900/80 backdrop-blur-[2px]" />
+      {/* Subtle translucent veil so text and login card contrast perfectly while preserving the full image */}
+      <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[1px] pointer-events-none" />
 
       {/* Decorative Glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
