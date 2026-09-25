@@ -54,6 +54,32 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
   const [selectedStatus, setSelectedStatus] = useState('Aktif');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Available classes across waliKelasList and students
+  const availableClasses = useMemo(() => {
+    const set = new Set<string>();
+    waliKelasList.forEach(w => {
+      if (w.kelas) set.add(w.kelas.trim());
+    });
+    students.forEach(s => {
+      if (s.kelas) set.add(s.kelas.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [waliKelasList, students]);
+
+  // Selected rombel state (supports 'Semua Rombel' for Admin)
+  const [selectedRombel, setSelectedRombel] = useState<string>(() => {
+    if (isUser) return userWali?.kelas || '';
+    return effectiveWali?.kelas || 'Semua Rombel';
+  });
+
+  React.useEffect(() => {
+    if (isUser) {
+      setSelectedRombel(userWali?.kelas || '');
+    } else if (effectiveWali?.kelas) {
+      setSelectedRombel(effectiveWali.kelas);
+    }
+  }, [isUser, userWali, effectiveWali]);
+
   // Pagination state (15 data per page)
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
@@ -208,16 +234,50 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
 
           {/* Form Content */}
           <div className="p-6 md:p-8 space-y-5">
+            {/* Direct Button: Tampilkan Semua Rombel untuk Admin */}
+            <div className="pb-4 border-b border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedRombel('Semua Rombel');
+                  if (onAuthenticateWali) {
+                    onAuthenticateWali({
+                      nip: 'ADMIN',
+                      nama: 'Administrator',
+                      kelas: 'Semua Rombel'
+                    });
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-sm shadow-md shadow-emerald-600/20 transition-all cursor-pointer group"
+              >
+                <School className="w-5 h-5 text-emerald-100 group-hover:scale-110 transition-transform" />
+                <span>Tampilkan Semua Rombel ({students.length} Peserta Didik)</span>
+                <ArrowRight className="w-4 h-4 text-emerald-100 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+
             {/* Quick Select Rombel Dropdown */}
             {waliKelasList.length > 0 && (
               <div className="pb-4 border-b border-slate-200">
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Pilih Rombel / Kelas Cepat:
+                  Atau Pilih Rombel / Kelas Tertentu:
                 </label>
                 <select
                   onChange={(e) => {
                     const selKelas = e.target.value;
                     if (!selKelas) return;
+                    if (selKelas === 'Semua Rombel') {
+                      setSelectedRombel('Semua Rombel');
+                      if (onAuthenticateWali) {
+                        onAuthenticateWali({
+                          nip: 'ADMIN',
+                          nama: 'Administrator',
+                          kelas: 'Semua Rombel'
+                        });
+                      }
+                      return;
+                    }
+                    setSelectedRombel(selKelas);
                     const found = waliKelasList.find(w => w.kelas === selKelas);
                     if (found && onAuthenticateWali) {
                       onAuthenticateWali(found);
@@ -227,6 +287,7 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-slate-50 font-semibold text-slate-800 text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
                 >
                   <option value="" disabled>-- Pilih Rombel / Kelas ({waliKelasList.length} rombel tersedia) --</option>
+                  <option value="Semua Rombel">🌐 Semua Rombel (Tampilkan Seluruh {students.length} Siswa)</option>
                   {waliKelasList.map((w, idx) => (
                     <option key={idx} value={w.kelas}>
                       {w.kelas} — {w.nama} (NIP: {w.nip || '-'})
@@ -303,10 +364,10 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
     );
   }
 
-  // --- CASE 3: Authenticated State: Filter Automatically to Wali Kelas Class ---
-  const targetKelas = effectiveWali.kelas;
+  // --- CASE 3: Authenticated State: Filter to Selected Class or All Rombel ---
+  const isAllRombel = !isUser && (selectedRombel === 'Semua Rombel' || selectedRombel === 'ALL' || effectiveWali.kelas === 'Semua Rombel');
+  const targetKelas = isAllRombel ? 'Semua Rombel' : selectedRombel;
   const cleanClass = (str?: string) => (str || '').trim().toUpperCase().replace(/\s+/g, ' ');
-  const targetClean = cleanClass(targetKelas);
 
   const getStudentStatus = (student: Student) => {
     return statusState[student.id] !== undefined 
@@ -333,8 +394,14 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
     setKetState(prev => ({ ...prev, [studentId]: newKet }));
   };
 
-  // Only consider students of this Wali Kelas's class (clean case-insensitive comparison)
-  const classStudents = students.filter((s) => cleanClass(s.kelas) === targetClean);
+  // If Admin chose Semua Rombel, consider all students; otherwise filter to target class
+  const classStudents = useMemo(() => {
+    if (isAllRombel) {
+      return students;
+    }
+    const targetClean = cleanClass(selectedRombel);
+    return students.filter((s) => cleanClass(s.kelas) === targetClean);
+  }, [students, isAllRombel, selectedRombel]);
 
   const hasChanges = classStudents.some((student) => {
     const newStatus = getStudentStatus(student);
@@ -357,7 +424,8 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
       !searchTerm ||
       (s.nama && s.nama.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (s.nipd && s.nipd.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (s.nisn && s.nisn.toLowerCase().includes(searchTerm.toLowerCase()));
+      (s.nisn && s.nisn.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (s.kelas && s.kelas.toLowerCase().includes(searchTerm.toLowerCase()));
 
     return matchesStatus && matchesSearch;
   });
@@ -444,10 +512,14 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
           </div>
           <div>
             <h2 className="text-base font-bold text-white leading-tight">
-              {effectiveWali.nama}
+              {isAllRombel
+                ? 'Semua Rombel (Mode Administrator)'
+                : effectiveWali.nama}
             </h2>
             <p className="text-xs text-indigo-200/90 mt-0.5 font-medium">
-              Wali Kelas {effectiveWali.kelas}
+              {isAllRombel
+                ? `Menampilkan seluruh rombel (${students.length} peserta didik)`
+                : `Wali Kelas ${selectedRombel}`}
             </p>
           </div>
         </div>
@@ -470,10 +542,17 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <UserCheck className="w-4 h-4 text-indigo-600" />
-              Tabel Verval PD — Kelas {targetKelas}
+              <span>
+                Tabel Verval PD — {isAllRombel ? 'Semua Rombel' : `Kelas ${selectedRombel}`}
+              </span>
+              <span className="text-[11px] font-normal text-slate-500">
+                ({filteredStudents.length} dari {classStudents.length} siswa)
+              </span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Pilih status keaktifan tiap siswa dan keterangan bila status Tidak Aktif.
+              {isAllRombel
+                ? 'Mode Administrator: Menampilkan seluruh rombel. Pilih status keaktifan tiap siswa dan simpan perubahan.'
+                : 'Pilih status keaktifan tiap siswa dan keterangan bila status Tidak Aktif.'}
             </p>
           </div>
 
@@ -485,7 +564,7 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Cari Nama / NISN / NIPD..."
+                  placeholder="Cari Nama / NISN / Rombel..."
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
@@ -496,13 +575,34 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
               </div>
             </div>
 
-            {/* Locked Filter Kelas Badge */}
+            {/* Filter Kelas / Rombel (Dropdown untuk Admin, Terkunci untuk Wali Kelas) */}
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Filter Kelas:</label>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50/80 text-xs font-bold text-indigo-900">
-                <Lock className="w-3 h-3 text-indigo-600" />
-                <span>{targetKelas}</span>
-              </div>
+              {isUser ? (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50/80 text-xs font-bold text-indigo-900">
+                  <Lock className="w-3 h-3 text-indigo-600" />
+                  <span>{selectedRombel}</span>
+                </div>
+              ) : (
+                <select
+                  value={selectedRombel}
+                  onChange={(e) => {
+                    setSelectedRombel(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-indigo-300 bg-indigo-50/90 text-xs font-bold text-indigo-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+                >
+                  <option value="Semua Rombel">🌐 Semua Rombel ({students.length} Siswa)</option>
+                  {availableClasses.map((cls) => {
+                    const count = students.filter(s => cleanClass(s.kelas) === cleanClass(cls)).length;
+                    return (
+                      <option key={cls} value={cls}>
+                        Kelas {cls} ({count} Siswa)
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
             </div>
 
             {/* Filter Status */}
@@ -589,7 +689,9 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
                 <tr>
                   <td colSpan={7} className="py-8 text-center text-slate-500 italic">
                     {classStudents.length === 0
-                      ? `Belum ada data siswa yang terdaftar untuk kelas ${targetKelas}.`
+                      ? (isAllRombel
+                          ? 'Belum ada data siswa yang terdaftar di sistem.'
+                          : `Belum ada data siswa yang terdaftar untuk kelas ${selectedRombel}.`)
                       : 'Tidak ada data peserta didik yang cocok dengan filter pencarian.'}
                   </td>
                 </tr>
@@ -686,7 +788,7 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
               <strong className="text-slate-900">
                 {Math.min(currentPage * itemsPerPage, filteredStudents.length)}
               </strong>{' '}
-              dari <strong className="text-slate-900">{filteredStudents.length}</strong> siswa (Kelas {targetKelas})
+              dari <strong className="text-slate-900">{filteredStudents.length}</strong> siswa ({isAllRombel ? 'Semua Rombel' : `Kelas ${selectedRombel}`})
             </span>
           </div>
 
