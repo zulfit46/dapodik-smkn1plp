@@ -36,6 +36,61 @@ try {
   console.warn('Failed to load gtk_download_headers.json:', e);
 }
 
+// Persistent Telegram Bot Config
+const TELEGRAM_CONFIG_FILE = path.join(process.cwd(), 'telegram_config.json');
+let telegramConfig = {
+  botToken: process.env.TELEGRAM_BOT_TOKEN || '',
+  chatId: process.env.TELEGRAM_CHAT_ID || '',
+  enabled: false,
+  notifyMutasiMasuk: true,
+  notifyMutasiKeluar: true,
+};
+
+try {
+  if (fs.existsSync(TELEGRAM_CONFIG_FILE)) {
+    const raw = fs.readFileSync(TELEGRAM_CONFIG_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      telegramConfig = {
+        ...telegramConfig,
+        ...parsed,
+        botToken: parsed.botToken || process.env.TELEGRAM_BOT_TOKEN || '',
+        chatId: parsed.chatId || process.env.TELEGRAM_CHAT_ID || '',
+      };
+      console.log(`Loaded Telegram config from telegram_config.json (enabled: ${telegramConfig.enabled})`);
+    }
+  }
+} catch (e) {
+  console.warn('Failed to load telegram_config.json:', e);
+}
+
+async function sendTelegramMessageServer(botToken?: string, chatId?: string, message?: string): Promise<{ ok: boolean; description?: string }> {
+  const token = (botToken || telegramConfig.botToken || '').trim();
+  const chat = (chatId || telegramConfig.chatId || '').trim();
+  if (!token || !chat) {
+    throw new Error('Telegram Bot Token atau Chat ID belum ditentukan');
+  }
+
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chat,
+      text: message || '',
+      parse_mode: 'HTML',
+      disable_web_page_preview: false,
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  const data: any = await res.json();
+  if (!res.ok || !data.ok) {
+    throw new Error(data.description || `HTTP ${res.status}: Gagal mengirim pesan ke Telegram API`);
+  }
+  return data;
+}
+
 let appConfig: AppConfig = {
   spreadsheetId: '1t_i5_kMDb00AT2uL0Km49_37CHJB2RWUv3tZjVgLlAk',
   sheetName: 'data',
@@ -1826,6 +1881,132 @@ async function startServer() {
       return res.status(500).json({
         status: "error",
         message: err?.message || "Gagal menghapus berkas di Google Drive"
+      });
+    }
+  });
+
+  // Save/Update Mutasi Masuk row to Google Sheets
+  app.post("/api/mutasi/masuk", async (req, res) => {
+    try {
+      const { item, isUpdate } = req.body;
+      if (!item) {
+        return res.status(400).json({ status: "error", message: "Data mutasi masuk tidak disertakan" });
+      }
+
+      const targetWebAppUrl = appConfig.webAppUrl;
+      if (!targetWebAppUrl) {
+        return res.status(400).json({ status: "error", message: "Web App URL belum dikonfigurasi" });
+      }
+
+      const gasPayload = {
+        action: isUpdate ? "updateMutasiMasuk" : "createMutasiMasuk",
+        target: "mutasi_masuk",
+        item: {
+          no: item.no || "",
+          nisn: item.nisn || "",
+          nama: item.nama || item.nama_siswa || "",
+          nama_siswa: item.nama || item.nama_siswa || "",
+          provinsi: item.provinsiNama || item.provinsi || "",
+          kab_kota: item.kabKotaNama || item.kab_kota || "",
+          kecamatan: item.kecamatanNama || item.kecamatan || "",
+          nama_sekolah: item.sekolahAsal || item.nama_sekolah || item.sekolah_asal || "",
+          sekolah_asal: item.sekolahAsal || item.nama_sekolah || item.sekolah_asal || "",
+          rombel_tujuan: item.rombelTujuan || item.rombel_tujuan || "",
+          status: item.status === "Diterima" ? "Diterima" : "Pending",
+          timestamp: item.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 19),
+          tgl_masuk: item.tglMasuk || item.tgl_masuk || ""
+        }
+      };
+
+      console.log(`[Mutasi Masuk Save] Mengirim data NISN ${gasPayload.item.nisn} ke Google Sheets...`);
+      const gasRes = await sendToGas(targetWebAppUrl, gasPayload, 30000);
+
+      return res.json({
+        status: "success",
+        message: "Data mutasi masuk berhasil disimpan ke Google Sheets (sheet: mutasi_masuk)",
+        gasResult: gasRes.json || gasRes.body
+      });
+    } catch (err: any) {
+      console.error("[Mutasi Masuk Save] Error:", err);
+      return res.status(500).json({
+        status: "error",
+        message: err?.message || "Gagal menyimpan data mutasi masuk ke Google Sheets"
+      });
+    }
+  });
+
+  // Telegram Endpoints
+  app.get("/api/telegram/config", (req, res) => {
+    res.json({
+      botToken: telegramConfig.botToken || "",
+      chatId: telegramConfig.chatId || "",
+      enabled: Boolean(telegramConfig.enabled),
+      notifyMutasiMasuk: telegramConfig.notifyMutasiMasuk !== false,
+      notifyMutasiKeluar: telegramConfig.notifyMutasiKeluar !== false,
+    });
+  });
+
+  app.post("/api/telegram/config", (req, res) => {
+    try {
+      const { botToken, chatId, enabled, notifyMutasiMasuk, notifyMutasiKeluar } = req.body;
+      telegramConfig = {
+        botToken: typeof botToken === "string" ? botToken.trim() : telegramConfig.botToken,
+        chatId: typeof chatId === "string" ? chatId.trim() : telegramConfig.chatId,
+        enabled: typeof enabled === "boolean" ? enabled : telegramConfig.enabled,
+        notifyMutasiMasuk: typeof notifyMutasiMasuk === "boolean" ? notifyMutasiMasuk : telegramConfig.notifyMutasiMasuk,
+        notifyMutasiKeluar: typeof notifyMutasiKeluar === "boolean" ? notifyMutasiKeluar : telegramConfig.notifyMutasiKeluar,
+      };
+
+      try {
+        fs.writeFileSync(TELEGRAM_CONFIG_FILE, JSON.stringify(telegramConfig, null, 2), "utf-8");
+      } catch (writeErr) {
+        console.warn("Gagal menyimpan ke telegram_config.json:", writeErr);
+      }
+
+      return res.json({
+        status: "success",
+        message: "Pengaturan Telegram berhasil disimpan di server",
+        config: {
+          botToken: telegramConfig.botToken,
+          chatId: telegramConfig.chatId,
+          enabled: telegramConfig.enabled,
+          notifyMutasiMasuk: telegramConfig.notifyMutasiMasuk,
+          notifyMutasiKeluar: telegramConfig.notifyMutasiKeluar,
+        }
+      });
+    } catch (err: any) {
+      console.error("[Telegram Config Save] Error:", err);
+      return res.status(500).json({
+        status: "error",
+        message: err?.message || "Gagal menyimpan konfigurasi Telegram"
+      });
+    }
+  });
+
+  app.post("/api/telegram/send", async (req, res) => {
+    try {
+      const { botToken, chatId, message } = req.body;
+      if (!message) {
+        return res.status(400).json({ status: "error", message: "Pesan tidak boleh kosong" });
+      }
+
+      const activeToken = botToken || telegramConfig.botToken;
+      const activeChatId = chatId || telegramConfig.chatId;
+      if (!activeToken || !activeChatId) {
+        return res.status(400).json({ status: "error", message: "Bot Token atau Chat ID belum ditentukan" });
+      }
+
+      const result = await sendTelegramMessageServer(activeToken, activeChatId, message);
+      return res.json({
+        status: "success",
+        message: "Pesan berhasil dikirim ke Telegram",
+        result
+      });
+    } catch (err: any) {
+      console.warn("[Telegram Send] Error:", err.message);
+      return res.status(400).json({
+        status: "error",
+        message: err?.message || "Gagal mengirim pesan Telegram"
       });
     }
   });
