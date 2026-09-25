@@ -1012,6 +1012,13 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
       return;
     }
 
+    // Validasi Wajib Upload Berkas untuk Mutasi Keluar
+    const hasBerkas = !!selectedBerkasFile || !!formKeluarData.uploadBerkas.trim();
+    if (!hasBerkas) {
+      setFormKeluarError('Berkas mutasi keluar wajib diunggah (silakan upload file surat permohonan / rekomendasi mutasi atau masukkan tautan berkas).');
+      return;
+    }
+
     setIsSavingKeluar(true);
     setFormKeluarError(null);
 
@@ -2513,7 +2520,7 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
                   <div className="lg:col-span-2">
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                       <label className="block font-semibold text-slate-700 text-xs">
-                        Upload Berkas Pendukung (Surat Permohonan / Rekomendasi Mutasi) <span className="text-slate-400 font-normal">(Opsional)</span>
+                        Upload Berkas Pendukung (Surat Permohonan / Rekomendasi Mutasi) <span className="text-rose-600 font-bold">* (Wajib Diunggah)</span>
                       </label>
                       <div className="flex items-center gap-2 text-[11px]">
                         {isAdmin && (
@@ -2608,15 +2615,18 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
                             value={formKeluarData.uploadBerkas}
                             onChange={(e) => setFormKeluarData(prev => ({ ...prev, uploadBerkas: e.target.value }))}
                             placeholder="Tempelkan link Google Drive (https://drive.google.com/file/d/...)"
-                            className="w-full pl-8 pr-3 py-2 bg-white rounded-lg border border-slate-300 text-slate-800 text-xs focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+                            className={`w-full pl-8 pr-3 py-2 bg-white rounded-lg border ${!formKeluarData.uploadBerkas.trim() ? 'border-amber-300' : 'border-slate-300'} text-slate-800 text-xs focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-2xs`}
                           />
                           <Link2 className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                         </div>
-                        {isAdmin && (
-                          <p className="text-[11px] text-slate-500">
-                            File disimpan di Drive Folder ID: <code className="font-mono text-slate-700">{DRIVE_FOLDER_ID_MUTASI_KELUAR}</code>
-                          </p>
-                        )}
+                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="text-rose-600 font-medium">* Berkas wajib diisi atau beralih ke Mode Upload File</span>
+                          {isAdmin && (
+                            <span className="text-slate-500">
+                              Drive Folder ID: <code className="font-mono text-slate-700">{DRIVE_FOLDER_ID_MUTASI_KELUAR}</code>
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ) : (
                       /* C. File Upload Zone (Drag & Drop + Click) */
@@ -2642,7 +2652,7 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
                               ? 'border-indigo-500 bg-indigo-50/60' 
                               : selectedBerkasFile 
                                 ? 'border-indigo-300 bg-indigo-50/20' 
-                                : 'border-slate-300 hover:border-indigo-400 bg-white hover:bg-slate-50/70'
+                                : 'border-rose-300 hover:border-indigo-400 bg-rose-50/20 hover:bg-slate-50/70'
                           }`}
                           onClick={() => {
                             if (!selectedBerkasFile && fileInputRef.current) {
@@ -2652,21 +2662,18 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
                         >
                           {!selectedBerkasFile ? (
                             <div className="flex flex-col items-center justify-center py-1">
-                              <div className="w-9 h-9 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1.5">
+                              <div className="w-9 h-9 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mb-1.5">
                                 <Upload className="w-4 h-4" />
                               </div>
-                              <p className="text-xs font-semibold text-slate-700">
-                                Klik untuk memilih berkas atau seret file ke sini
+                              <p className="text-xs font-semibold text-slate-800">
+                                Klik untuk memilih berkas atau seret file ke sini <span className="text-rose-600 font-bold">* (Wajib)</span>
                               </p>
-                              <p className="text-[11px] text-slate-400 mt-0.5">
+                              <p className="text-[11px] text-slate-500 mt-0.5">
                                 Format didukung: PDF, PNG, JPG, JPEG, DOCX (Maks. 25MB)
                               </p>
-                              {/* <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-lg text-[11px] text-slate-600">
-                                <span>Format nama otomatis di Drive:</span>
-                                <code className="font-mono text-indigo-700 font-semibold">nisn_nama</code>
-                                <span className="text-slate-400">Contoh:</span>
-                                <code className="font-mono text-slate-700">0106762079_ABDUL_RIFAI.pdf</code>
-                              </div> */}
+                              <div className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-100/80 px-2.5 py-0.5 rounded-full border border-rose-200">
+                                <span>* Wajib Upload Berkas Mutasi Keluar</span>
+                              </div>
                             </div>
                           ) : (
                             <div className="space-y-2 text-left" onClick={(e) => e.stopPropagation()}>
