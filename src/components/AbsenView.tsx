@@ -156,6 +156,144 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
     setKetState({});
   };
 
+  // --- Rombel Filtering & Helpers (Must run before any early return to prevent hook order mismatch) ---
+  const isAllRombel = !isUser && (selectedRombel === 'Semua Rombel' || selectedRombel === 'ALL' || effectiveWali?.kelas === 'Semua Rombel');
+  const targetKelas = isAllRombel ? 'Semua Rombel' : (selectedRombel || effectiveWali?.kelas || '');
+  const cleanClass = (str?: string) => (str || '').trim().toUpperCase().replace(/\s+/g, ' ');
+
+  const getStudentStatus = (student: Student) => {
+    return statusState[student.id] !== undefined 
+      ? statusState[student.id] 
+      : (student.status || '');
+  };
+
+  const getStudentKet = (student: Student) => {
+    return ketState[student.id] !== undefined 
+      ? ketState[student.id] 
+      : (student.ket || '');
+  };
+
+  const handleStatusChange = (studentId: string, newStatus: string) => {
+    setStatusState(prev => ({ ...prev, [studentId]: newStatus }));
+    if (newStatus === 'Aktif') {
+      setKetState(prev => ({ ...prev, [studentId]: '' }));
+    } else if (newStatus === 'Tidak Aktif' && (!ketState[studentId] || ketState[studentId] === '')) {
+      setKetState(prev => ({ ...prev, [studentId]: 'Mutasi' }));
+    }
+  };
+
+  const handleKetChange = (studentId: string, newKet: string) => {
+    setKetState(prev => ({ ...prev, [studentId]: newKet }));
+  };
+
+  // If Admin chose Semua Rombel, consider all students; otherwise filter to target class
+  const classStudents = useMemo(() => {
+    if (isAllRombel) {
+      return students;
+    }
+    const targetClean = cleanClass(selectedRombel);
+    return students.filter((s) => cleanClass(s.kelas) === targetClean);
+  }, [students, isAllRombel, selectedRombel]);
+
+  const hasChanges = classStudents.some((student) => {
+    const newStatus = getStudentStatus(student);
+    const newKet = getStudentKet(student);
+    const oldStatus = student.status || '';
+    const oldKet = student.ket || '';
+
+    const isStatusEdited = statusState[student.id] !== undefined;
+    const isKetEdited = ketState[student.id] !== undefined;
+
+    return isStatusEdited || isKetEdited || newStatus !== oldStatus || newKet !== oldKet;
+  });
+
+  const filteredStudents = classStudents.filter((s) => {
+    const currentStatus = getStudentStatus(s);
+    const matchesStatus =
+      selectedStatus === 'Semua' ||
+      (selectedStatus === 'Belum Diisi' ? !currentStatus : currentStatus === selectedStatus);
+    const matchesSearch =
+      !searchTerm ||
+      (s.nama && s.nama.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (s.nipd && s.nipd.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (s.nisn && s.nisn.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (s.kelas && s.kelas.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    return matchesStatus && matchesSearch;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / itemsPerPage));
+  const paginatedStudents = filteredStudents.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const handleSave = async () => {
+    setSavedSuccessMessage(null);
+    setNoChangesNotice(false);
+
+    // Only pick students of this class whose status or keterangan actually changed
+    const modifiedStudents = classStudents.filter((student) => {
+      const newStatus = getStudentStatus(student);
+      const newKet = getStudentKet(student);
+      const oldStatus = student.status || '';
+      const oldKet = student.ket || '';
+
+      const isStatusEdited = statusState[student.id] !== undefined;
+      const isKetEdited = ketState[student.id] !== undefined;
+
+      return isStatusEdited || isKetEdited || newStatus !== oldStatus || newKet !== oldKet;
+    });
+
+    if (modifiedStudents.length === 0) {
+      setNoChangesNotice(true);
+      setTimeout(() => setNoChangesNotice(false), 4000);
+      return;
+    }
+
+    setIsSaving(true);
+    const updates = modifiedStudents.map((student) => {
+      const status = getStudentStatus(student);
+      let ket = '';
+      if (status === 'Aktif') {
+        ket = '';
+      } else if (status === 'Tidak Aktif') {
+        ket = getStudentKet(student) || 'Mutasi';
+      } else {
+        ket = '';
+      }
+      return {
+        id: student.nama ? student.nama.trim() : (student.id || student.nisn || student.nipd),
+        studentId: student.id,
+        nisn: student.nisn || '',
+        nipd: student.nipd || '',
+        nama: student.nama || '',
+        status,
+        ket
+      };
+    });
+
+    let syncFeedback = '';
+    if (onSaveVerval) {
+      try {
+        const result = await onSaveVerval(updates);
+        if (result && typeof result.gasUpdated === 'number') {
+          syncFeedback = ` (${result.gasUpdated} data berhasil diperbarui di Spreadsheet)`;
+        }
+      } catch (err) {
+        console.warn('Error saving verval updates:', err);
+      }
+    }
+
+    // Reset local edit states since changes are saved
+    setStatusState({});
+    setKetState({});
+
+    setIsSaving(false);
+    setSavedSuccessMessage('Berhasil simpan data');
+    setTimeout(() => setSavedSuccessMessage(null), 4000);
+  };
+
   // CASE 1: Logged in as User, but NOT a Wali Kelas -> ACCESS DENIED
   if (isUser && !userWali) {
     return (
@@ -365,143 +503,6 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
   }
 
   // --- CASE 3: Authenticated State: Filter to Selected Class or All Rombel ---
-  const isAllRombel = !isUser && (selectedRombel === 'Semua Rombel' || selectedRombel === 'ALL' || effectiveWali.kelas === 'Semua Rombel');
-  const targetKelas = isAllRombel ? 'Semua Rombel' : selectedRombel;
-  const cleanClass = (str?: string) => (str || '').trim().toUpperCase().replace(/\s+/g, ' ');
-
-  const getStudentStatus = (student: Student) => {
-    return statusState[student.id] !== undefined 
-      ? statusState[student.id] 
-      : (student.status || '');
-  };
-
-  const getStudentKet = (student: Student) => {
-    return ketState[student.id] !== undefined 
-      ? ketState[student.id] 
-      : (student.ket || '');
-  };
-
-  const handleStatusChange = (studentId: string, newStatus: string) => {
-    setStatusState(prev => ({ ...prev, [studentId]: newStatus }));
-    if (newStatus === 'Aktif') {
-      setKetState(prev => ({ ...prev, [studentId]: '' }));
-    } else if (newStatus === 'Tidak Aktif' && (!ketState[studentId] || ketState[studentId] === '')) {
-      setKetState(prev => ({ ...prev, [studentId]: 'Mutasi' }));
-    }
-  };
-
-  const handleKetChange = (studentId: string, newKet: string) => {
-    setKetState(prev => ({ ...prev, [studentId]: newKet }));
-  };
-
-  // If Admin chose Semua Rombel, consider all students; otherwise filter to target class
-  const classStudents = useMemo(() => {
-    if (isAllRombel) {
-      return students;
-    }
-    const targetClean = cleanClass(selectedRombel);
-    return students.filter((s) => cleanClass(s.kelas) === targetClean);
-  }, [students, isAllRombel, selectedRombel]);
-
-  const hasChanges = classStudents.some((student) => {
-    const newStatus = getStudentStatus(student);
-    const newKet = getStudentKet(student);
-    const oldStatus = student.status || '';
-    const oldKet = student.ket || '';
-
-    const isStatusEdited = statusState[student.id] !== undefined;
-    const isKetEdited = ketState[student.id] !== undefined;
-
-    return isStatusEdited || isKetEdited || newStatus !== oldStatus || newKet !== oldKet;
-  });
-
-  const filteredStudents = classStudents.filter((s) => {
-    const currentStatus = getStudentStatus(s);
-    const matchesStatus =
-      selectedStatus === 'Semua' ||
-      (selectedStatus === 'Belum Diisi' ? !currentStatus : currentStatus === selectedStatus);
-    const matchesSearch =
-      !searchTerm ||
-      (s.nama && s.nama.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (s.nipd && s.nipd.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (s.nisn && s.nisn.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (s.kelas && s.kelas.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    return matchesStatus && matchesSearch;
-  });
-
-  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / itemsPerPage));
-  const paginatedStudents = filteredStudents.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
-  const handleSave = async () => {
-    setSavedSuccessMessage(null);
-    setNoChangesNotice(false);
-
-    // Only pick students of this class whose status or keterangan actually changed
-    const modifiedStudents = classStudents.filter((student) => {
-      const newStatus = getStudentStatus(student);
-      const newKet = getStudentKet(student);
-      const oldStatus = student.status || '';
-      const oldKet = student.ket || '';
-
-      const isStatusEdited = statusState[student.id] !== undefined;
-      const isKetEdited = ketState[student.id] !== undefined;
-
-      return isStatusEdited || isKetEdited || newStatus !== oldStatus || newKet !== oldKet;
-    });
-
-    if (modifiedStudents.length === 0) {
-      setNoChangesNotice(true);
-      setTimeout(() => setNoChangesNotice(false), 4000);
-      return;
-    }
-
-    setIsSaving(true);
-    const updates = modifiedStudents.map((student) => {
-      const status = getStudentStatus(student);
-      let ket = '';
-      if (status === 'Aktif') {
-        ket = '';
-      } else if (status === 'Tidak Aktif') {
-        ket = getStudentKet(student) || 'Mutasi';
-      } else {
-        ket = '';
-      }
-      return {
-        id: student.nama ? student.nama.trim() : (student.id || student.nisn || student.nipd),
-        studentId: student.id,
-        nisn: student.nisn || '',
-        nipd: student.nipd || '',
-        nama: student.nama || '',
-        status,
-        ket
-      };
-    });
-
-    let syncFeedback = '';
-    if (onSaveVerval) {
-      try {
-        const result = await onSaveVerval(updates);
-        if (result && typeof result.gasUpdated === 'number') {
-          syncFeedback = ` (${result.gasUpdated} data berhasil diperbarui di Spreadsheet)`;
-        }
-      } catch (err) {
-        console.warn('Error saving verval updates:', err);
-      }
-    }
-
-    // Reset local edit states since changes are saved
-    setStatusState({});
-    setKetState({});
-
-    setIsSaving(false);
-    setSavedSuccessMessage('Berhasil simpan data');
-    setTimeout(() => setSavedSuccessMessage(null), 4000);
-  };
-
   return (
     <div className="space-y-6">
       {/* Top Wali Kelas Profile & Status Banner */}
@@ -514,7 +515,7 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
             <h2 className="text-base font-bold text-white leading-tight">
               {isAllRombel
                 ? 'Semua Rombel (Mode Administrator)'
-                : effectiveWali.nama}
+                : (effectiveWali?.nama || 'Administrator')}
             </h2>
             <p className="text-xs text-indigo-200/90 mt-0.5 font-medium">
               {isAllRombel
