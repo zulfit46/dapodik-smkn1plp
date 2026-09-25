@@ -154,6 +154,14 @@ export interface AppConfig {
   lastSyncedAt: string | null;
 }
 
+export interface TelegramConfig {
+  botToken: string;
+  chatId: string;
+  enabled: boolean;
+  notifyMutasiMasuk: boolean;
+  notifyMutasiKeluar: boolean;
+}
+
 export interface GTKData {
   id: string;
   no?: string | number;

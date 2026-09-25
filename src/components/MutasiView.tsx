@@ -17,6 +17,14 @@ import {
 } from '../services/sheetsSync';
 import * as XLSX from 'xlsx';
 import { CodeGsModal } from './CodeGsModal';
+import { TelegramConfigModal } from './TelegramConfigModal';
+import { 
+  notifyMutasiMasuk, 
+  notifyMutasiKeluar, 
+  getTelegramConfig, 
+  DEFAULT_TELEGRAM_CONFIG 
+} from '../services/telegramService';
+import { TelegramConfig } from '../types';
 import { 
   UserPlus, 
   UserMinus, 
@@ -53,7 +61,8 @@ import {
   Paperclip,
   RotateCcw,
   Code,
-  FileCode
+  FileCode,
+  Send
 } from 'lucide-react';
 
 interface MutasiViewProps {
@@ -195,6 +204,14 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
   const [selectedDetail, setSelectedDetail] = useState<MutasiMasukItem | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'info'; message: string; title?: string } | null>(null);
   const [highlightedRowId, setHighlightedRowId] = useState<string | null>(null);
+
+  // Telegram Notification Config State
+  const [isTelegramModalOpen, setIsTelegramModalOpen] = useState<boolean>(false);
+  const [telegramConfig, setTelegramConfig] = useState<TelegramConfig>(DEFAULT_TELEGRAM_CONFIG);
+
+  useEffect(() => {
+    getTelegramConfig().then(setTelegramConfig);
+  }, []);
 
   // Form State Mutasi Keluar
   const [isFormKeluarOpen, setIsFormKeluarOpen] = useState<boolean>(false);
@@ -586,6 +603,17 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
     if (appConfig?.webAppUrl) {
       saveMutasiMasukDirectly(appConfig.webAppUrl, targetItem, Boolean(editingItem))
         .catch(err => console.warn('Latar belakang simpan ke spreadsheet:', err));
+    }
+
+    // Kirim notifikasi Telegram otomatis untuk data mutasi masuk baru
+    if (!editingItem) {
+      notifyMutasiMasuk(targetItem, telegramConfig)
+        .then(tRes => {
+          if (tRes.success) {
+            console.log('[Telegram] Notifikasi mutasi masuk terkirim:', tRes.message);
+          }
+        })
+        .catch(tErr => console.warn('[Telegram] Gagal mengirim notifikasi mutasi masuk:', tErr));
     }
 
     setNotification({
@@ -1106,6 +1134,17 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
       console.warn('Simpan ke spreadsheet gagal:', err);
     }
 
+    // Kirim notifikasi Telegram otomatis untuk data mutasi keluar baru
+    if (!editingKeluarItem) {
+      notifyMutasiKeluar(targetItem, telegramConfig)
+        .then(tRes => {
+          if (tRes.success) {
+            console.log('[Telegram] Notifikasi mutasi keluar terkirim:', tRes.message);
+          }
+        })
+        .catch(tErr => console.warn('[Telegram] Gagal mengirim notifikasi mutasi keluar:', tErr));
+    }
+
     resetKeluarForm();
     setIsSavingKeluar(false);
     setHighlightedRowId(targetItem.id);
@@ -1345,10 +1384,38 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
           </button>
         </div>
 
-        {/* Quick Info Badge */}
-        <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 pr-2">
-          <Info className="w-4 h-4 text-indigo-600" />
-          <span>Pengelolaan Data Mutasi Peserta Didik SMKN 1 Palopo</span>
+        {/* Right Action & Quick Info */}
+        <div className="flex items-center gap-2.5">
+          {/* Tombol Pengaturan Notifikasi Telegram (Hanya Tampil untuk Admin) */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setIsTelegramModalOpen(true)}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
+                telegramConfig.enabled
+                  ? 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-100 hover:border-sky-400'
+                  : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-800'
+              }`}
+              title="Pengaturan Notifikasi Bot Telegram (Admin)"
+            >
+              <Send className="w-3.5 h-3.5 text-sky-500" />
+              <span className="hidden sm:inline">Notifikasi Telegram</span>
+              <span className="sm:hidden">Telegram</span>
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  telegramConfig.enabled
+                    ? 'bg-emerald-500 ring-2 ring-emerald-200 animate-pulse'
+                    : 'bg-slate-300'
+                }`}
+                title={telegramConfig.enabled ? 'Telegram: Aktif' : 'Telegram: Nonaktif'}
+              />
+            </button>
+          )}
+
+          <div className="hidden md:flex items-center gap-2 text-xs text-slate-500 pr-1">
+            <Info className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>Pengelolaan Mutasi Peserta Didik SMKN 1 Palopo</span>
+          </div>
         </div>
       </div>
 
@@ -3442,6 +3509,25 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
         webAppUrl={appConfig?.webAppUrl || ''}
         onSaveWebAppUrl={() => {}}
       />
+
+      {/* Telegram Notification Settings Modal (Khusus Admin) */}
+      {isAdmin && (
+        <TelegramConfigModal
+          isOpen={isTelegramModalOpen}
+          onClose={() => setIsTelegramModalOpen(false)}
+          onConfigSaved={(updatedCfg) => {
+            setTelegramConfig(updatedCfg);
+            setNotification({
+              type: 'success',
+              title: 'Pengaturan Telegram Disimpan',
+              message: updatedCfg.enabled
+                ? 'Notifikasi Telegram aktif! Bot siap mengirim informasi mutasi baru.'
+                : 'Notifikasi Telegram dinonaktifkan.'
+            });
+            setTimeout(() => setNotification(null), 4000);
+          }}
+        />
+      )}
     </div>
   );
 };

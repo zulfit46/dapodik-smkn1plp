@@ -269,6 +269,70 @@ function getMutasiKeluarSheet() {
 }
 
 /**
+ * Helper otomatis update kolom status & ket siswa di sheet "data"
+ * Jika siswa mutasi keluar, status diubah menjadi "Tidak Aktif" dan ket diisi sesuai input (Mutasi / Mengundurkan Diri).
+ */
+function updateStudentStatusInSheet(targetNisn, targetNipd, newStatus, newKet, targetNama) {
+  try {
+    var cleanNisn = String(targetNisn || '').trim();
+    var cleanNipd = String(targetNipd || '').trim();
+    var cleanNama = String(targetNama || '').trim().toLowerCase();
+    if (!cleanNisn && !cleanNipd && !cleanNama) return;
+
+    var studentSheet = getStudentSheet();
+    var data = studentSheet.getDataRange().getValues();
+    if (data.length <= 1) return;
+
+    var headers = data[0].map(function(h) { return String(h).trim(); });
+    var nisnCol = headers.findIndex(function(h) { return h.toLowerCase().replace(/[^a-z0-9]/g, '') === 'nisn'; });
+    var nipdCol = headers.findIndex(function(h) { return h.toLowerCase().replace(/[^a-z0-9]/g, '') === 'nipd'; });
+    var namaCol = headers.findIndex(function(h) {
+      var hc = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return hc === 'nama' || hc === 'namasiswa';
+    });
+    var statusCol = headers.findIndex(function(h) { return h.toLowerCase().replace(/[^a-z0-9]/g, '') === 'status'; });
+    var ketCol = headers.findIndex(function(h) {
+      var hc = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return hc === 'ket' || hc === 'keterangan';
+    });
+
+    if (statusCol < 0) {
+      statusCol = headers.length;
+      headers.push("status");
+      studentSheet.getRange(1, statusCol + 1).setValue("status").setFontWeight("bold");
+    }
+    if (ketCol < 0) {
+      ketCol = headers.length;
+      headers.push("ket");
+      studentSheet.getRange(1, ketCol + 1).setValue("ket").setFontWeight("bold");
+    }
+
+    for (var i = 1; i < data.length; i++) {
+      var rowNisn = nisnCol >= 0 ? String(data[i][nisnCol] || '').trim() : '';
+      var rowNipd = nipdCol >= 0 ? String(data[i][nipdCol] || '').trim() : '';
+      var rowNama = namaCol >= 0 ? String(data[i][namaCol] || '').trim().toLowerCase() : '';
+
+      var isMatch = (cleanNisn && rowNisn === cleanNisn) ||
+                    (cleanNipd && rowNipd === cleanNipd) ||
+                    (cleanNama && rowNama === cleanNama);
+
+      if (isMatch) {
+        if (statusCol >= 0 && newStatus !== undefined) {
+          studentSheet.getRange(i + 1, statusCol + 1).setNumberFormat("@").setValue(newStatus);
+        }
+        if (ketCol >= 0 && newKet !== undefined) {
+          studentSheet.getRange(i + 1, ketCol + 1).setNumberFormat("@").setValue(newKet);
+        }
+        Logger.log("Update sheet data siswa " + (cleanNisn || cleanNipd || cleanNama) + " -> status: " + newStatus + ", ket: " + newKet);
+        break;
+      }
+    }
+  } catch (err) {
+    Logger.log("updateStudentStatusInSheet error: " + err.message);
+  }
+}
+
+/**
  * Endpoint HTTP GET: Membaca data siswa, GTK, naikpangkat, kgb, atau mutasi_masuk
  * Parameter ?sheet=data | gtk | naikpangkat | kgb | mutasi_masuk
  */
@@ -925,6 +989,15 @@ function doPost(e) {
           const targetRange = sheet.getRange(2, 1, rowsToWrite.length, headers.length);
           targetRange.setNumberFormat("@");
           targetRange.setValues(rowsToWrite);
+
+          // Otomatis update status siswa di sheet data menjadi "Tidak Aktif" dan ket diisi ketMutasi
+          items.forEach(function(m) {
+            var tNisn = String(m.nisn || m.NISN || "").trim();
+            var tNipd = String(m.nipd || m.NIPD || "").trim();
+            var tKet = String(m.ketMutasi || m.ket_mutasi || m.ket || "Mutasi").trim();
+            updateStudentStatusInSheet(tNisn, tNipd, "Tidak Aktif", tKet);
+          });
+
           return responseJSON({ status: "success", message: "Berhasil sinkronisasi " + rowsToWrite.length + " data Mutasi Keluar!" });
         }
       }
@@ -993,6 +1066,13 @@ function doPost(e) {
           deletedRowsCount++;
         });
 
+        // Otomatis kembalikan status siswa di sheet data menjadi "Aktif" dan ket menjadi ""
+        items.forEach(function(item) {
+          var tNisn = String(item.nisn || item.NISN || "").trim();
+          var tNipd = String(item.nipd || item.NIPD || "").trim();
+          updateStudentStatusInSheet(tNisn, tNipd, "Aktif", "");
+        });
+
         return responseJSON({
           status: "success",
           message: "Berhasil menghapus " + deletedRowsCount + " baris data mutasi keluar dan " + deletedFilesCount + " berkas di Google Drive",
@@ -1045,6 +1125,8 @@ function doPost(e) {
 
         if (foundRow > 1) {
           sheet.deleteRow(foundRow);
+          // Otomatis kembalikan status siswa di sheet data menjadi "Aktif" dan ket menjadi ""
+          updateStudentStatusInSheet(targetNisn, targetNipd, "Aktif", "");
           return responseJSON({
             status: "success",
             message: "Data mutasi keluar dan berkas terkait di Google Drive berhasil dihapus",
@@ -1091,6 +1173,11 @@ function doPost(e) {
         if (hClean === "timestamp") return String(mItem.timestamp || Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Makassar", "dd/MM/yyyy HH:mm:ss"));
         return String(mItem[h] || mItem[hClean] || "");
       });
+
+      // Otomatis update status siswa di sheet data menjadi "Tidak Aktif" dan ket diisi sesuai input form mutasi keluar (Mutasi / Mengundurkan Diri)
+      const ketValue = String(mItem.ketMutasi || mItem.ket_mutasi || mItem.ket || "Mutasi").trim();
+      const targetNama = String(mItem.nama || mItem.nama_siswa || "").trim();
+      updateStudentStatusInSheet(targetNisn, targetNipd, "Tidak Aktif", ketValue, targetNama);
 
       if (foundRow > 1) {
         const cellRange = sheet.getRange(foundRow, 1, 1, headers.length);

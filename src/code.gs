@@ -18,6 +18,39 @@ const SHEET_NAME_STUDENTS = "data";
 const SHEET_NAME_GTK = "gtk";
 const SHEET_NAME_NAIKPANGKAT = "naikpangkat";
 const SHEET_NAME_KGB = "kgb";
+const SHEET_NAME_MUTASI_MASUK = "mutasi_masuk";
+const SHEET_NAME_MUTASI_KELUAR = "mutasi_keluar";
+const DRIVE_FOLDER_ID_MUTASI = "1sGqbpA6uctgvOmYUwyxNP8pC5ORZUy56";
+
+/**
+ * ==============================================================================
+ * AKTIVASI IZIN GOOGLE DRIVE (LAKUKAN 1 KALI AGAR UPLOAD BERKAS BISA DISIMPAN):
+ * 1. Di toolbar atas editor Apps Script (sebelah Debug), pilih fungsi "authorizeDrive"
+ * 2. Klik tombol "Jalankan" (Run)
+ * 3. Muncul popup "Izin Diperlukan" -> Klik "Tinjau Izin" -> Pilih akun Google Anda
+ * 4. Klik tulisan "Lanjutan" (Advanced) di kiri bawah -> Klik "Buka ... (tidak aman)" -> Klik "Izinkan"
+ *    (Pastikan Anda mengizinkan akses penuh: melihat, mengedit, membuat file di Google Drive)
+ * 5. WAJIB: Setelah selesai diizinkan, terapkan versi baru Web App:
+ *    -> Klik tombol biru "Terapkan" (Deploy) di pojok kanan atas
+ *    -> Pilih "Kelola penerapan" (Manage deployments)
+ *    -> Klik ikon Pensil (Edit) pada penerapan aktif
+ *    -> Ubah Versi menjadi: "Versi Baru" (New version)
+ *    -> Klik "Terapkan" (Deploy)
+ * ==============================================================================
+ */
+function authorizeDrive() {
+  try {
+    const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID_MUTASI);
+    // PENTING: createFile memicu Google Apps Script meminta izin TULIS (https://www.googleapis.com/auth/drive)
+    const testFile = folder.createFile("test_permission_aktivasi.txt", "Aktivasi izin upload berkas mutasi berhasil.");
+    testFile.setTrashed(true); // Langsung buang ke sampah agar folder tetap bersih
+    Logger.log("BERHASIL LENGKAP! Izin BACA & TULIS Google Drive telah aktif untuk folder: " + folder.getName());
+    return "BERHASIL LENGKAP! Izin BACA & TULIS Google Drive telah aktif untuk folder: " + folder.getName();
+  } catch (err) {
+    Logger.log("Error aktivasi Drive: " + err.message);
+    throw err;
+  }
+}
 
 // Helper konversi tanggal ke format teks dd/MM/yyyy (hh/mm/yyyy)
 function formatToDDMMYYYY(val) {
@@ -83,6 +116,16 @@ const OFFICIAL_NAIKPANGKAT_HEADERS = [
 // List Header Resmi KGB
 const OFFICIAL_KGB_HEADERS = [
   "No", "nip", "nama", "gol", "no_sk", "tgl_sk", "TMT_kgb", "masa_kerja_tahun", "masa_kerja_bln", "gaji_pokok", "timestamp", "status"
+];
+
+// List Header Resmi Mutasi Masuk
+const OFFICIAL_MUTASI_MASUK_HEADERS = [
+  "No", "NISN", "Nama_Siswa", "Provinsi", "Kab_kota", "Kecamatan", "Nama_Sekolah", "Rombel_Tujuan", "Tgl_Masuk", "Status", "Timestamp"
+];
+
+// List Header Resmi Mutasi Keluar
+const OFFICIAL_MUTASI_KELUAR_HEADERS = [
+  "No", "NIPD", "NISN", "Nama", "Tempat_Lahir", "tgl_Lahir", "Rombel", "Ket_Mutasi", "Pindah_Ke", "tgl_mutasi", "alasan_mutasi", "upload_berkas", "Status", "Timestamp"
 ];
 
 function getSpreadsheet() {
@@ -151,9 +194,109 @@ function getKgbSheet() {
   return sheet;
 }
 
+function getMutasiMasukSheet() {
+  const ss = getSpreadsheet();
+  const allSheets = ss.getSheets();
+  let sheet = allSheets.find(s => {
+    const name = s.getName().trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return name === "mutasimasuk" || name === "mutasi";
+  });
+  if (!sheet) {
+    sheet = ss.getSheetByName(SHEET_NAME_MUTASI_MASUK);
+  }
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME_MUTASI_MASUK);
+    sheet.appendRow(OFFICIAL_MUTASI_MASUK_HEADERS);
+    sheet.getRange(1, 1, 1, OFFICIAL_MUTASI_MASUK_HEADERS.length).setFontWeight("bold").setBackground("#d1fae5");
+  }
+  return sheet;
+}
+
+function getMutasiKeluarSheet() {
+  const ss = getSpreadsheet();
+  const allSheets = ss.getSheets();
+  let sheet = allSheets.find(s => {
+    const name = s.getName().trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return name === "mutasikeluar" || name === "mutasikeluarsiswa";
+  });
+  if (!sheet) {
+    sheet = ss.getSheetByName(SHEET_NAME_MUTASI_KELUAR);
+  }
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME_MUTASI_KELUAR);
+    sheet.appendRow(OFFICIAL_MUTASI_KELUAR_HEADERS);
+    sheet.getRange(1, 1, 1, OFFICIAL_MUTASI_KELUAR_HEADERS.length).setFontWeight("bold").setBackground("#ffe4e6");
+  }
+  return sheet;
+}
+
 /**
- * Endpoint HTTP GET: Membaca data siswa, GTK, naikpangkat, atau kgb
- * Parameter ?sheet=data | gtk | naikpangkat | kgb
+ * Helper otomatis update kolom status & ket siswa di sheet "data"
+ * Jika siswa mutasi keluar, status diubah menjadi "Tidak Aktif" dan ket diisi sesuai input (Mutasi / Mengundurkan Diri).
+ */
+function updateStudentStatusInSheet(targetNisn, targetNipd, newStatus, newKet, targetNama) {
+  try {
+    var cleanNisn = String(targetNisn || '').trim();
+    var cleanNipd = String(targetNipd || '').trim();
+    var cleanNama = String(targetNama || '').trim().toLowerCase();
+    if (!cleanNisn && !cleanNipd && !cleanNama) return;
+
+    var studentSheet = getStudentSheet();
+    var data = studentSheet.getDataRange().getValues();
+    if (data.length <= 1) return;
+
+    var headers = data[0].map(function(h) { return String(h).trim(); });
+    var nisnCol = headers.findIndex(function(h) { return h.toLowerCase().replace(/[^a-z0-9]/g, '') === 'nisn'; });
+    var nipdCol = headers.findIndex(function(h) { return h.toLowerCase().replace(/[^a-z0-9]/g, '') === 'nipd'; });
+    var namaCol = headers.findIndex(function(h) {
+      var hc = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return hc === 'nama' || hc === 'namasiswa';
+    });
+    var statusCol = headers.findIndex(function(h) { return h.toLowerCase().replace(/[^a-z0-9]/g, '') === 'status'; });
+    var ketCol = headers.findIndex(function(h) {
+      var hc = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return hc === 'ket' || hc === 'keterangan';
+    });
+
+    if (statusCol < 0) {
+      statusCol = headers.length;
+      headers.push("status");
+      studentSheet.getRange(1, statusCol + 1).setValue("status").setFontWeight("bold");
+    }
+    if (ketCol < 0) {
+      ketCol = headers.length;
+      headers.push("ket");
+      studentSheet.getRange(1, ketCol + 1).setValue("ket").setFontWeight("bold");
+    }
+
+    for (var i = 1; i < data.length; i++) {
+      var rowNisn = nisnCol >= 0 ? String(data[i][nisnCol] || '').trim() : '';
+      var rowNipd = nipdCol >= 0 ? String(data[i][nipdCol] || '').trim() : '';
+      var rowNama = namaCol >= 0 ? String(data[i][namaCol] || '').trim().toLowerCase() : '';
+
+      var isMatch = (cleanNisn && rowNisn === cleanNisn) ||
+                    (cleanNipd && rowNipd === cleanNipd) ||
+                    (cleanNama && rowNama === cleanNama);
+
+      if (isMatch) {
+        if (statusCol >= 0 && newStatus !== undefined) {
+          studentSheet.getRange(i + 1, statusCol + 1).setNumberFormat("@").setValue(newStatus);
+        }
+        if (ketCol >= 0 && newKet !== undefined) {
+          studentSheet.getRange(i + 1, ketCol + 1).setNumberFormat("@").setValue(newKet);
+        }
+        Logger.log("Update sheet data siswa " + (cleanNisn || cleanNipd || cleanNama) + " -> status: " + newStatus + ", ket: " + newKet);
+        break;
+      }
+    }
+  } catch (err) {
+    Logger.log("updateStudentStatusInSheet error: " + err.message);
+  }
+}
+
+/**
+ * Endpoint HTTP GET: Membaca data siswa, GTK, naikpangkat, kgb, atau mutasi_masuk
+ * Parameter ?sheet=data | gtk | naikpangkat | kgb | mutasi_masuk
  */
 function doGet(e) {
   try {
@@ -330,6 +473,108 @@ function doGet(e) {
       });
     }
 
+    // 4. DATA MUTASI MASUK
+    if (rawTarget === "mutasi_masuk" || rawTarget === "mutasimasuk" || rawTarget === "mutasi") {
+      const sheet = getMutasiMasukSheet();
+      const data = sheet.getDataRange().getValues();
+      if (data.length <= 1) {
+        return responseJSON({ status: "success", target: "mutasi_masuk", total: 0, data: [] });
+      }
+      const headers = data[0].map(h => String(h).trim());
+      const rows = data.slice(1);
+      const list = rows.map((row, index) => {
+        const obj = { rowIndex: index + 2 };
+        headers.forEach((header, colIdx) => {
+          let val = row[colIdx];
+          if (val instanceof Date) {
+            val = formatToDDMMYYYY(val);
+          }
+          const strVal = val !== undefined && val !== null ? String(val).trim() : "";
+          obj[header] = strVal;
+          const hClean = String(header).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          obj[hClean] = strVal;
+
+          if (hClean === "no") obj["no"] = Number(strVal) || (index + 1);
+          if (hClean === "nisn") obj["nisn"] = strVal;
+          if (hClean === "namasiswa" || hClean === "nama") obj["nama"] = strVal;
+          if (hClean === "provinsi") obj["provinsiNama"] = strVal;
+          if (hClean === "kabkota" || hClean === "kabupatenkota") obj["kabKotaNama"] = strVal;
+          if (hClean === "kecamatan") obj["kecamatanNama"] = strVal;
+          if (hClean === "namasekolah" || hClean === "sekolahasal") obj["sekolahAsal"] = strVal;
+          if (hClean === "rombeltujuan" || hClean === "rombel") obj["rombelTujuan"] = strVal;
+          if (hClean === "status") {
+            obj["status"] = (strVal.toLowerCase() === "diterima") ? "Diterima" : "Pending";
+          }
+          if (hClean === "timestamp") obj["timestamp"] = strVal;
+          if (hClean === "tglmasuk" || hClean === "tanggalmasuk") obj["tglMasuk"] = strVal;
+        });
+        obj.id = obj.id || "MUT-IN-" + (obj.nisn ? obj.nisn : String(index + 1));
+        if (!obj.status) obj.status = "Pending";
+        const dateOnlyStr = obj.tglMasuk ? formatToDDMMYYYY(obj.tglMasuk) : formatToDDMMYYYY(obj.timestamp || "");
+        obj.tglMasuk = dateOnlyStr;
+        obj.tanggalPengajuan = dateOnlyStr;
+        return obj;
+      });
+
+      return responseJSON({
+        status: "success",
+        target: "mutasi_masuk",
+        total: list.length,
+        data: list,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // 5. DATA MUTASI KELUAR
+    if (rawTarget === "mutasi_keluar" || rawTarget === "mutasikeluar") {
+      const sheet = getMutasiKeluarSheet();
+      const data = sheet.getDataRange().getValues();
+      if (data.length <= 1) {
+        return responseJSON({ status: "success", target: "mutasi_keluar", total: 0, data: [] });
+      }
+      const headers = data[0].map(h => String(h).trim());
+      const rows = data.slice(1);
+      const list = rows.map((row, index) => {
+        const obj = { rowIndex: index + 2 };
+        headers.forEach((header, colIdx) => {
+          let val = row[colIdx];
+          if (val instanceof Date) {
+            val = formatToDDMMYYYY(val);
+          }
+          const strVal = val !== undefined && val !== null ? String(val).trim() : "";
+          obj[header] = strVal;
+          const hClean = String(header).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          obj[hClean] = strVal;
+
+          if (hClean === "no") obj["no"] = Number(strVal) || (index + 1);
+          if (hClean === "nipd") obj["nipd"] = strVal;
+          if (hClean === "nisn") obj["nisn"] = strVal;
+          if (hClean === "nama" || hClean === "namasiswa") obj["nama"] = strVal;
+          if (hClean === "tempatlahir") obj["tempatLahir"] = strVal;
+          if (hClean === "tgllahir" || hClean === "tanggallahir") obj["tglLahir"] = formatToDDMMYYYY(strVal);
+          if (hClean === "rombel" || hClean === "kelas") obj["rombel"] = strVal;
+          if (hClean === "ketmutasi" || hClean === "keteranganmutasi") obj["ketMutasi"] = strVal;
+          if (hClean === "pindahke" || hClean === "sekolatujuan" || hClean === "tujuan") obj["pindahKe"] = strVal;
+          if (hClean === "tglmutasi" || hClean === "tanggalmutasi") obj["tglMutasi"] = formatToDDMMYYYY(strVal);
+          if (hClean === "alasanmutasi" || hClean === "alasan") obj["alasanMutasi"] = strVal;
+          if (hClean === "uploadberkas" || hClean === "berkas" || hClean === "file") obj["uploadBerkas"] = strVal;
+          if (hClean === "status") obj["status"] = strVal;
+          if (hClean === "timestamp") obj["timestamp"] = strVal;
+        });
+        obj.id = obj.id || "MUT-OUT-" + (obj.nisn ? obj.nisn : (obj.nipd ? obj.nipd : String(index + 1)));
+        if (!obj.status) obj.status = "Selesai";
+        return obj;
+      });
+
+      return responseJSON({
+        status: "success",
+        target: "mutasi_keluar",
+        total: list.length,
+        data: list,
+        timestamp: new Date().toISOString()
+      });
+    }
+
     // 4. Default: DATA SISWA
     const sheet = getStudentSheet();
     const data = sheet.getDataRange().getValues();
@@ -419,7 +664,496 @@ function doPost(e) {
     }
 
     const action = contents.action || "update";
-    const targetType = contents.target || (contents.gtk ? "gtk" : (contents.naikpangkat ? "naikpangkat" : (contents.kgb ? "kgb" : "data")));
+
+    // -1. UPLOAD BERKAS KE GOOGLE DRIVE (MUTASI KELUAR / BERKAS PENDUKUNG)
+    if (action === "uploadBerkasMutasi" || action === "uploadBerkas" || action === "uploadFile" || action === "upload") {
+      const folderId = contents.folderId || "1sGqbpA6uctgvOmYUwyxNP8pC5ORZUy56";
+      const fileName = contents.fileName || ("berkas_" + Date.now());
+      const mimeType = contents.mimeType || "application/pdf";
+      const base64Data = contents.base64Data || contents.data || contents.fileData || "";
+      const oldFileUrl = contents.oldFileUrl || contents.oldUrl || "";
+      const oldFileId = contents.oldFileId || "";
+
+      if (!base64Data) {
+        return responseJSON({ status: "error", message: "Data base64 berkas tidak ditemukan" });
+      }
+
+      try {
+        const folder = DriveApp.getFolderById(folderId);
+
+        // 1. Jika ada berkas lama saat edit data, buang berkas lama ke sampah agar tidak ada duplikasi
+        if (oldFileId) {
+          try {
+            const oldFile = DriveApp.getFileById(oldFileId);
+            oldFile.setTrashed(true);
+            Logger.log("Berkas lama by ID berhasil dihapus: " + oldFileId);
+          } catch (eOldId) {
+            Logger.log("Info hapus oldFileId: " + eOldId.message);
+          }
+        }
+        if (oldFileUrl) {
+          const matchOld = String(oldFileUrl).match(/[-w]{25,}/);
+          if (matchOld) {
+            try {
+              const oldFile = DriveApp.getFileById(matchOld[0]);
+              oldFile.setTrashed(true);
+              Logger.log("Berkas lama by URL berhasil dihapus: " + matchOld[0]);
+            } catch (eOldUrl) {
+              Logger.log("Info hapus oldFileUrl: " + eOldUrl.message);
+            }
+          }
+        }
+
+        // 2. Bersihkan file yang memiliki nama sama persis di folder tersebut agar tidak ganda
+        try {
+          const dupFiles = folder.getFilesByName(fileName);
+          while (dupFiles.hasNext()) {
+            const df = dupFiles.next();
+            df.setTrashed(true);
+            Logger.log("File duplikat " + fileName + " (" + df.getId() + ") dibersihkan.");
+          }
+        } catch (eDup) {
+          Logger.log("Info pembersihan file duplikat: " + eDup.message);
+        }
+
+        const decoded = Utilities.base64Decode(base64Data);
+        const blob = Utilities.newBlob(decoded, mimeType, fileName);
+        const createdFile = folder.createFile(blob);
+
+        try {
+          createdFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        } catch (eShare) {
+          // Abaikan jika restricted oleh policy domain organisasi
+        }
+
+        const fileId = createdFile.getId();
+        const fileUrl = "https://drive.google.com/file/d/" + fileId + "/view?usp=sharing";
+
+        return responseJSON({
+          status: "success",
+          message: "Berkas berhasil diupload ke Google Drive (file lama diganti)",
+          fileUrl: fileUrl,
+          fileId: fileId,
+          fileName: fileName,
+          folderId: folderId
+        });
+      } catch (errDrive) {
+        return responseJSON({
+          status: "error",
+          message: "Gagal mengunggah ke Google Drive: " + errDrive.toString()
+        });
+      }
+    }
+
+    // -2. HAPUS BERKAS DARI GOOGLE DRIVE
+    if (action === "deleteBerkasMutasi" || action === "deleteFile" || action === "deleteDriveFile") {
+      const fileUrl = contents.fileUrl || contents.uploadBerkas || contents.url || "";
+      const fileId = contents.fileId || contents.id || "";
+      const fileName = contents.fileName || "";
+      const folderId = contents.folderId || "1sGqbpA6uctgvOmYUwyxNP8pC5ORZUy56";
+      let deleted = false;
+
+      if (fileId) {
+        try {
+          DriveApp.getFileById(fileId).setTrashed(true);
+          deleted = true;
+        } catch (e) {
+          Logger.log("Delete fileId error: " + e.message);
+        }
+      }
+
+      if (!deleted && fileUrl) {
+        const match = String(fileUrl).match(/[-w]{25,}/);
+        if (match) {
+          try {
+            DriveApp.getFileById(match[0]).setTrashed(true);
+            deleted = true;
+          } catch (e) {
+            Logger.log("Delete fileUrl error: " + e.message);
+          }
+        }
+      }
+
+      if (fileName) {
+        try {
+          const folder = DriveApp.getFolderById(folderId);
+          const files = folder.getFilesByName(fileName);
+          while (files.hasNext()) {
+            files.next().setTrashed(true);
+            deleted = true;
+          }
+        } catch (e) {
+          Logger.log("Delete fileName error: " + e.message);
+        }
+      }
+
+      return responseJSON({
+        status: "success",
+        message: deleted ? "Berkas di Google Drive berhasil dihapus" : "Berkas tidak ditemukan atau sudah dihapus",
+        deleted: deleted
+      });
+    }
+
+    const targetType = contents.target || (contents.mutasi_masuk || contents.mutasimasuk || contents.mutasi ? "mutasi_masuk" : (contents.mutasi_keluar || contents.mutasikeluar ? "mutasi_keluar" : (contents.gtk ? "gtk" : (contents.naikpangkat ? "naikpangkat" : (contents.kgb ? "kgb" : "data")))));
+
+    // 0. TARGET: MUTASI_MASUK
+    if (targetType === "mutasi_masuk" || targetType === "mutasimasuk" || targetType === "mutasi") {
+      const sheet = getMutasiMasukSheet();
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0].map(h => String(h).trim());
+
+      // Sync All / Import All
+      if (action === "syncAll" || action === "importAll" || action === "saveAll") {
+        const items = contents.items || contents.data || contents.mutasi_masuk || [];
+        if (items.length > 0) {
+          const rowsToWrite = items.map((m, idx) => {
+            return headers.map(h => {
+              const hClean = String(h).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+              if (hClean === "no") return String(m.no || (idx + 1));
+              if (hClean === "nisn") return String(m.nisn || "");
+              if (hClean === "namasiswa" || hClean === "nama") return String(m.nama || m.nama_siswa || "");
+              if (hClean === "provinsi") return String(m.provinsiNama || m.provinsi || "");
+              if (hClean === "kabkota" || hClean === "kabupatenkota") return String(m.kabKotaNama || m.kab_kota || "");
+              if (hClean === "kecamatan") return String(m.kecamatanNama || m.kecamatan || "");
+              if (hClean === "namasekolah" || hClean === "sekolahasal") return String(m.sekolahAsal || m.nama_sekolah || "");
+              if (hClean === "rombeltujuan" || hClean === "rombel") return String(m.rombelTujuan || m.rombel_tujuan || "");
+              if (hClean === "status") return (String(m.status || "").toLowerCase() === "diterima") ? "Diterima" : "Pending";
+              if (hClean === "timestamp") return String(m.timestamp || Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Makassar", "dd/MM/yyyy HH:mm:ss"));
+              if (hClean === "tglmasuk" || hClean === "tanggalmasuk") {
+                var rawDate = m.tglMasuk || m.tgl_masuk || m.tanggalPengajuan || m.timestamp || Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Makassar", "dd/MM/yyyy");
+                return formatToDDMMYYYY(rawDate);
+              }
+              return String(m[h] || m[hClean] || "");
+            });
+          });
+
+          const neededRows = rowsToWrite.length + 1;
+          const maxRows = sheet.getMaxRows();
+          if (maxRows < neededRows) sheet.insertRowsAfter(maxRows, neededRows - maxRows + 10);
+          if (sheet.getLastRow() > 1) sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).clearContent();
+
+          const targetRange = sheet.getRange(2, 1, rowsToWrite.length, headers.length);
+          targetRange.setNumberFormat("@");
+          targetRange.setValues(rowsToWrite);
+          return responseJSON({ status: "success", message: "Berhasil sinkronisasi " + rowsToWrite.length + " data Mutasi Masuk!" });
+        }
+      }
+
+      // Delete Mutasi Masuk
+      if (action === "delete" || action === "deleteMutasiMasuk") {
+        const delItem = contents.item || contents.data || contents;
+        const targetNisn = String(delItem.nisn || delItem.NISN || "").trim();
+        let foundRow = -1;
+
+        const nisnColIdx = headers.findIndex(h => h.toLowerCase().trim() === 'nisn');
+        const colToSearch = nisnColIdx >= 0 ? nisnColIdx : 1;
+
+        for (let i = 1; i < data.length; i++) {
+          const rNisn = String(data[i][colToSearch] || "").trim();
+          if (targetNisn && rNisn === targetNisn) {
+            foundRow = i + 1;
+            break;
+          }
+        }
+
+        if (foundRow > 1) {
+          sheet.deleteRow(foundRow);
+          return responseJSON({ status: "success", message: "Data mutasi masuk berhasil dihapus dari Google Sheets", row: foundRow });
+        }
+        return responseJSON({ status: "warning", message: "Baris data mutasi masuk tidak ditemukan untuk dihapus" });
+      }
+
+      // Single Add / Update
+      const mItem = contents.item || contents.data || contents;
+      const targetNisn = String(mItem.nisn || mItem.NISN || "").trim();
+      let foundRow = -1;
+
+      const nisnColIdx = headers.findIndex(h => h.toLowerCase().trim() === 'nisn');
+      const colToSearch = nisnColIdx >= 0 ? nisnColIdx : 1;
+
+      for (let i = 1; i < data.length; i++) {
+        const rNisn = String(data[i][colToSearch] || "").trim();
+        if (targetNisn && rNisn === targetNisn) {
+          foundRow = i + 1;
+          break;
+        }
+      }
+
+      const rowValues = headers.map(h => {
+        const hClean = String(h).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (hClean === "no") return String(mItem.no || (foundRow > 1 ? data[foundRow - 1][0] : sheet.getLastRow()));
+        if (hClean === "nisn") return String(mItem.nisn || "");
+        if (hClean === "namasiswa" || hClean === "nama") return String(mItem.nama || mItem.nama_siswa || "");
+        if (hClean === "provinsi") return String(mItem.provinsiNama || mItem.provinsi || "");
+        if (hClean === "kabkota" || hClean === "kabupatenkota") return String(mItem.kabKotaNama || mItem.kab_kota || "");
+        if (hClean === "kecamatan") return String(mItem.kecamatanNama || mItem.kecamatan || "");
+        if (hClean === "namasekolah" || hClean === "sekolahasal") return String(mItem.sekolahAsal || mItem.nama_sekolah || "");
+        if (hClean === "rombeltujuan" || hClean === "rombel") return String(mItem.rombelTujuan || mItem.rombel_tujuan || "");
+        if (hClean === "status") return (String(mItem.status || "").toLowerCase() === "diterima") ? "Diterima" : "Pending";
+        if (hClean === "timestamp") return String(mItem.timestamp || Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Makassar", "dd/MM/yyyy HH:mm:ss"));
+        if (hClean === "tglmasuk" || hClean === "tanggalmasuk") {
+          var rawDate = mItem.tglMasuk || mItem.tgl_masuk || mItem.tanggalPengajuan || mItem.timestamp || Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Makassar", "dd/MM/yyyy");
+          return formatToDDMMYYYY(rawDate);
+        }
+        return String(mItem[h] || mItem[hClean] || "");
+      });
+
+      if (foundRow > 1) {
+        const cellRange = sheet.getRange(foundRow, 1, 1, headers.length);
+        cellRange.setNumberFormat("@");
+        cellRange.setValues([rowValues]);
+        return responseJSON({ status: "success", message: "Data mutasi masuk berhasil diperbarui", row: foundRow });
+      } else {
+        const newRowIdx = sheet.getLastRow() + 1;
+        const cellRange = sheet.getRange(newRowIdx, 1, 1, headers.length);
+        cellRange.setNumberFormat("@");
+        cellRange.setValues([rowValues]);
+        return responseJSON({ status: "success", message: "Data mutasi masuk baru berhasil ditambahkan" });
+      }
+    }
+
+    // 0B. TARGET: MUTASI_KELUAR
+    if (targetType === "mutasi_keluar" || targetType === "mutasikeluar") {
+      const sheet = getMutasiKeluarSheet();
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0].map(h => String(h).trim());
+
+      // Sync All / Import All
+      if (action === "syncAll" || action === "importAll" || action === "saveAll" || action === "syncAllMutasiKeluar") {
+        const items = contents.items || contents.data || contents.mutasi_keluar || [];
+        if (items.length > 0) {
+          const rowsToWrite = items.map((m, idx) => {
+            return headers.map(h => {
+              const hClean = String(h).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+              if (hClean === "no") return String(m.no || (idx + 1));
+              if (hClean === "nipd") return String(m.nipd || "");
+              if (hClean === "nisn") return String(m.nisn || "");
+              if (hClean === "nama" || hClean === "namasiswa") return String(m.nama || m.nama_siswa || "");
+              if (hClean === "tempatlahir") return String(m.tempatLahir || m.tempat_lahir || "");
+              if (hClean === "tgllahir" || hClean === "tanggallahir") return formatToDDMMYYYY(m.tglLahir || m.tgl_lahir || "");
+              if (hClean === "rombel" || hClean === "kelas") return String(m.rombel || m.kelas || "");
+              if (hClean === "ketmutasi" || hClean === "keteranganmutasi") return String(m.ketMutasi || m.ket_mutasi || m.ket || "");
+              if (hClean === "pindahke" || hClean === "sekolatujuan" || hClean === "tujuan") return String(m.pindahKe || m.pindah_ke || "");
+              if (hClean === "tglmutasi" || hClean === "tanggalmutasi") return formatToDDMMYYYY(m.tglMutasi || m.tgl_mutasi || "");
+              if (hClean === "alasanmutasi" || hClean === "alasan") return String(m.alasanMutasi || m.alasan_mutasi || m.alasan || "");
+              if (hClean === "uploadberkas" || hClean === "berkas" || hClean === "file") return String(m.uploadBerkas || m.upload_berkas || "");
+              if (hClean === "status") return String(m.status || "Selesai");
+              if (hClean === "timestamp") return String(m.timestamp || Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Makassar", "dd/MM/yyyy HH:mm:ss"));
+              return String(m[h] || m[hClean] || "");
+            });
+          });
+
+          const neededRows = rowsToWrite.length + 1;
+          const maxRows = sheet.getMaxRows();
+          if (maxRows < neededRows) sheet.insertRowsAfter(maxRows, neededRows - maxRows + 10);
+          if (sheet.getLastRow() > 1) sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).clearContent();
+
+          const targetRange = sheet.getRange(2, 1, rowsToWrite.length, headers.length);
+          targetRange.setNumberFormat("@");
+          targetRange.setValues(rowsToWrite);
+
+          // Otomatis update status siswa di sheet data menjadi "Tidak Aktif" dan ket diisi ketMutasi
+          items.forEach(function(m) {
+            var tNisn = String(m.nisn || m.NISN || "").trim();
+            var tNipd = String(m.nipd || m.NIPD || "").trim();
+            var tKet = String(m.ketMutasi || m.ket_mutasi || m.ket || "Mutasi").trim();
+            updateStudentStatusInSheet(tNisn, tNipd, "Tidak Aktif", tKet);
+          });
+
+          return responseJSON({ status: "success", message: "Berhasil sinkronisasi " + rowsToWrite.length + " data Mutasi Keluar!" });
+        }
+      }
+
+      // Batch Delete Mutasi Keluar & Berkas Terkait di Google Drive
+      if (action === "deleteMultiple" || action === "deleteMultipleMutasiKeluar") {
+        const items = contents.items || contents.data || [];
+        const nisnColIdx = headers.findIndex(h => h.toLowerCase().trim() === 'nisn');
+        const nipdColIdx = headers.findIndex(h => h.toLowerCase().trim() === 'nipd');
+        const berkasColIdx = headers.findIndex(h => {
+          const c = h.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          return c === 'uploadberkas' || c === 'berkas' || c === 'file';
+        });
+
+        let deletedRowsCount = 0;
+        let deletedFilesCount = 0;
+        const rowsToDelete = [];
+
+        items.forEach(function(item) {
+          const tNisn = String(item.nisn || item.NISN || "").trim();
+          const tNipd = String(item.nipd || item.NIPD || "").trim();
+          let fUrl = item.uploadBerkas || item.upload_berkas || item.fileUrl || "";
+
+          // Hapus berkas dari Google Drive jika ada tautannya
+          if (fUrl) {
+            const m = String(fUrl).match(/[-w]{25,}/);
+            if (m) {
+              try {
+                DriveApp.getFileById(m[0]).setTrashed(true);
+                deletedFilesCount++;
+              } catch (eF) {
+                Logger.log("Drive trash file error: " + eF.message);
+              }
+            }
+          }
+
+          // Cari baris di sheet
+          for (let i = 1; i < data.length; i++) {
+            const rNisn = nisnColIdx >= 0 ? String(data[i][nisnColIdx] || "").trim() : "";
+            const rNipd = nipdColIdx >= 0 ? String(data[i][nipdColIdx] || "").trim() : "";
+            if ((tNisn && rNisn === tNisn) || (tNipd && rNipd === tNipd)) {
+              const rowNum = i + 1;
+              if (rowsToDelete.indexOf(rowNum) === -1) {
+                rowsToDelete.push(rowNum);
+                // Jika fUrl kosong di parameter, ambil dari isi sheet
+                if (!fUrl && berkasColIdx >= 0) {
+                  const sheetFUrl = String(data[i][berkasColIdx] || "");
+                  const m2 = sheetFUrl.match(/[-w]{25,}/);
+                  if (m2) {
+                    try {
+                      DriveApp.getFileById(m2[0]).setTrashed(true);
+                      deletedFilesCount++;
+                    } catch (eF2) {}
+                  }
+                }
+              }
+              break;
+            }
+          }
+        });
+
+        // Hapus baris dari bawah ke atas agar index tidak bergeser
+        rowsToDelete.sort(function(a, b) { return b - a; });
+        rowsToDelete.forEach(function(r) {
+          sheet.deleteRow(r);
+          deletedRowsCount++;
+        });
+
+        // Otomatis kembalikan status siswa di sheet data menjadi "Aktif" dan ket menjadi ""
+        items.forEach(function(item) {
+          var tNisn = String(item.nisn || item.NISN || "").trim();
+          var tNipd = String(item.nipd || item.NIPD || "").trim();
+          updateStudentStatusInSheet(tNisn, tNipd, "Aktif", "");
+        });
+
+        return responseJSON({
+          status: "success",
+          message: "Berhasil menghapus " + deletedRowsCount + " baris data mutasi keluar dan " + deletedFilesCount + " berkas di Google Drive",
+          deletedRowsCount: deletedRowsCount,
+          deletedFilesCount: deletedFilesCount
+        });
+      }
+
+      // Single Delete Mutasi Keluar & Berkas Terkait di Google Drive
+      if (action === "delete" || action === "deleteMutasiKeluar") {
+        const delItem = contents.item || contents.data || contents;
+        const targetNisn = String(delItem.nisn || delItem.NISN || "").trim();
+        const targetNipd = String(delItem.nipd || delItem.NIPD || "").trim();
+        let fileToDelete = delItem.uploadBerkas || delItem.upload_berkas || delItem.fileUrl || "";
+        let foundRow = -1;
+
+        const nisnColIdx = headers.findIndex(h => h.toLowerCase().trim() === 'nisn');
+        const nipdColIdx = headers.findIndex(h => h.toLowerCase().trim() === 'nipd');
+        const berkasColIdx = headers.findIndex(h => {
+          const c = h.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          return c === 'uploadberkas' || c === 'berkas' || c === 'file';
+        });
+
+        for (let i = 1; i < data.length; i++) {
+          const rNisn = nisnColIdx >= 0 ? String(data[i][nisnColIdx] || "").trim() : "";
+          const rNipd = nipdColIdx >= 0 ? String(data[i][nipdColIdx] || "").trim() : "";
+          if ((targetNisn && rNisn === targetNisn) || (targetNipd && rNipd === targetNipd)) {
+            foundRow = i + 1;
+            if (!fileToDelete && berkasColIdx >= 0) {
+              fileToDelete = String(data[i][berkasColIdx] || "");
+            }
+            break;
+          }
+        }
+
+        // Hapus file terkait dari Google Drive jika ada
+        let driveDeleted = false;
+        if (fileToDelete) {
+          const match = String(fileToDelete).match(/[-w]{25,}/);
+          if (match) {
+            try {
+              DriveApp.getFileById(match[0]).setTrashed(true);
+              driveDeleted = true;
+              Logger.log("Berkas mutasi keluar berhasil dihapus dari Drive: " + match[0]);
+            } catch (eDelDrive) {
+              Logger.log("Gagal hapus berkas drive: " + eDelDrive.message);
+            }
+          }
+        }
+
+        if (foundRow > 1) {
+          sheet.deleteRow(foundRow);
+          // Otomatis kembalikan status siswa di sheet data menjadi "Aktif" dan ket menjadi ""
+          updateStudentStatusInSheet(targetNisn, targetNipd, "Aktif", "");
+          return responseJSON({
+            status: "success",
+            message: "Data mutasi keluar dan berkas terkait di Google Drive berhasil dihapus",
+            row: foundRow,
+            driveDeleted: driveDeleted
+          });
+        }
+        return responseJSON({ status: "warning", message: "Baris data mutasi keluar tidak ditemukan untuk dihapus" });
+      }
+
+      // Single Add / Update Mutasi Keluar
+      const mItem = contents.item || contents.data || contents;
+      const targetNisn = String(mItem.nisn || mItem.NISN || "").trim();
+      const targetNipd = String(mItem.nipd || mItem.NIPD || "").trim();
+      let foundRow = -1;
+
+      const nisnColIdx = headers.findIndex(h => h.toLowerCase().trim() === 'nisn');
+      const nipdColIdx = headers.findIndex(h => h.toLowerCase().trim() === 'nipd');
+
+      for (let i = 1; i < data.length; i++) {
+        const rNisn = nisnColIdx >= 0 ? String(data[i][nisnColIdx] || "").trim() : "";
+        const rNipd = nipdColIdx >= 0 ? String(data[i][nipdColIdx] || "").trim() : "";
+        if ((targetNisn && rNisn === targetNisn) || (targetNipd && rNipd === targetNipd)) {
+          foundRow = i + 1;
+          break;
+        }
+      }
+
+      const rowValues = headers.map(h => {
+        const hClean = String(h).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (hClean === "no") return String(mItem.no || (foundRow > 1 ? data[foundRow - 1][0] : sheet.getLastRow()));
+        if (hClean === "nipd") return String(mItem.nipd || "");
+        if (hClean === "nisn") return String(mItem.nisn || "");
+        if (hClean === "nama" || hClean === "namasiswa") return String(mItem.nama || mItem.nama_siswa || "");
+        if (hClean === "tempatlahir") return String(mItem.tempatLahir || mItem.tempat_lahir || "");
+        if (hClean === "tgllahir" || hClean === "tanggallahir") return formatToDDMMYYYY(mItem.tglLahir || mItem.tgl_lahir || "");
+        if (hClean === "rombel" || hClean === "kelas") return String(mItem.rombel || mItem.kelas || "");
+        if (hClean === "ketmutasi" || hClean === "keteranganmutasi") return String(mItem.ketMutasi || mItem.ket_mutasi || mItem.ket || "");
+        if (hClean === "pindahke" || hClean === "sekolatujuan" || hClean === "tujuan") return String(mItem.pindahKe || mItem.pindah_ke || "");
+        if (hClean === "tglmutasi" || hClean === "tanggalmutasi") return formatToDDMMYYYY(mItem.tglMutasi || mItem.tgl_mutasi || "");
+        if (hClean === "alasanmutasi" || hClean === "alasan") return String(mItem.alasanMutasi || mItem.alasan_mutasi || mItem.alasan || "");
+        if (hClean === "uploadberkas" || hClean === "berkas" || hClean === "file") return String(mItem.uploadBerkas || mItem.upload_berkas || "");
+        if (hClean === "status") return String(mItem.status || "Selesai");
+        if (hClean === "timestamp") return String(mItem.timestamp || Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Makassar", "dd/MM/yyyy HH:mm:ss"));
+        return String(mItem[h] || mItem[hClean] || "");
+      });
+
+      // Otomatis update status siswa di sheet data menjadi "Tidak Aktif" dan ket diisi sesuai input form mutasi keluar (Mutasi / Mengundurkan Diri)
+      const ketValue = String(mItem.ketMutasi || mItem.ket_mutasi || mItem.ket || "Mutasi").trim();
+      const targetNama = String(mItem.nama || mItem.nama_siswa || "").trim();
+      updateStudentStatusInSheet(targetNisn, targetNipd, "Tidak Aktif", ketValue, targetNama);
+
+      if (foundRow > 1) {
+        const cellRange = sheet.getRange(foundRow, 1, 1, headers.length);
+        cellRange.setNumberFormat("@");
+        cellRange.setValues([rowValues]);
+        return responseJSON({ status: "success", message: "Data mutasi keluar berhasil diperbarui", row: foundRow });
+      } else {
+        const newRowIdx = sheet.getLastRow() + 1;
+        const cellRange = sheet.getRange(newRowIdx, 1, 1, headers.length);
+        cellRange.setNumberFormat("@");
+        cellRange.setValues([rowValues]);
+        return responseJSON({ status: "success", message: "Data mutasi keluar baru berhasil ditambahkan" });
+      }
+    }
 
     // 1. TARGET: NAIKPANGKAT / PANGKAT
     if (targetType === "naikpangkat" || targetType === "pangkat") {

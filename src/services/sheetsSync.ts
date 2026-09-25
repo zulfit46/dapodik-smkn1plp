@@ -1161,31 +1161,50 @@ export async function saveMutasiMasukDirectly(
   item: Partial<MutasiMasukItem>,
   isUpdate: boolean
 ): Promise<{ success: boolean; message?: string }> {
+  const rawTs = item.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 19);
+  const dateOnlyText = formatToDDMMYYYY(item.tglMasuk || rawTs);
+
+  const formattedItem = {
+    no: item.no || '',
+    nisn: item.nisn || '',
+    nama: item.nama || '',
+    nama_siswa: item.nama || '',
+    provinsi: item.provinsiNama || '',
+    kab_kota: item.kabKotaNama || '',
+    kecamatan: item.kecamatanNama || '',
+    nama_sekolah: item.sekolahAsal || '',
+    sekolah_asal: item.sekolahAsal || '',
+    rombel_tujuan: item.rombelTujuan || '',
+    status: item.status === 'Diterima' ? 'Diterima' : 'Pending',
+    timestamp: rawTs,
+    tgl_masuk: dateOnlyText,
+    tglmasuk: dateOnlyText,
+    tanggal_masuk: dateOnlyText
+  };
+
+  // 1. Try server proxy /api/mutasi/masuk
+  try {
+    const sRes = await fetch('/api/mutasi/masuk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item: formattedItem, isUpdate }),
+      signal: AbortSignal.timeout(20000)
+    });
+    if (sRes.ok) {
+      const sJson = await sRes.json();
+      return { success: true, message: sJson.message || 'Data mutasi masuk berhasil disimpan ke Google Sheets (sheet: mutasi_masuk)' };
+    }
+  } catch (proxyErr) {
+    console.warn('Proxy /api/mutasi/masuk error, falling back to direct Web App call:', proxyErr);
+  }
+
+  // 2. Direct Web App URL
   if (!webAppUrl) return { success: false, message: 'URL Web App belum dikonfigurasi' };
   try {
-    const rawTs = item.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 19);
-    const dateOnlyText = formatToDDMMYYYY(item.tglMasuk || rawTs);
-
     const payload = {
       action: isUpdate ? 'updateMutasiMasuk' : 'createMutasiMasuk',
       target: 'mutasi_masuk',
-      item: {
-        no: item.no || '',
-        nisn: item.nisn || '',
-        nama: item.nama || '',
-        nama_siswa: item.nama || '',
-        provinsi: item.provinsiNama || '',
-        kab_kota: item.kabKotaNama || '',
-        kecamatan: item.kecamatanNama || '',
-        nama_sekolah: item.sekolahAsal || '',
-        sekolah_asal: item.sekolahAsal || '',
-        rombel_tujuan: item.rombelTujuan || '',
-        status: item.status === 'Diterima' ? 'Diterima' : 'Pending',
-        timestamp: rawTs,
-        tgl_masuk: dateOnlyText,
-        tglmasuk: dateOnlyText,
-        tanggal_masuk: dateOnlyText
-      }
+      item: formattedItem
     };
     await fetch(webAppUrl, {
       method: 'POST',
