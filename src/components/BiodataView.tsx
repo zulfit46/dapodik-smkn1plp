@@ -70,6 +70,7 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
   const [selectedKelas, setSelectedKelas] = useState('Semua');
   const [selectedJK, setSelectedJK] = useState('Semua');
   const [selectedAgama, setSelectedAgama] = useState('Semua');
+  const [selectedStatus, setSelectedStatus] = useState('Semua'); // BARU: Filter Status
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -118,7 +119,7 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
       isMounted = false;
       window.removeEventListener('gtk_download_headers_updated', handleCustomUpdate);
     };
-  }, [webAppUrl]);
+  }, [webAppUrl, onUpdateAllowedGtkHeaders]);
 
   // Column visibility state (default all standard columns visible for Admin)
   const [visibleColumns, setVisibleColumns] = useState({
@@ -162,6 +163,13 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
     return ['Semua', ...Array.from(set).sort()];
   }, [students]);
 
+  // BARU: Unique Status list
+  const uniqueStatus = useMemo(() => {
+    const statusList = students.map((s) => s.status || 'Aktif').filter((s): s is string => Boolean(s));
+    const set = new Set<string>(statusList);
+    return ['Semua', ...Array.from(set).sort()];
+  }, [students]);
+
   // Filter students based on search and filters
   const filteredStudents = useMemo(() => {
     return students.filter((student) => {
@@ -188,9 +196,12 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
       // Agama match
       const matchAgama = selectedAgama === 'Semua' || student.agama === selectedAgama;
 
-      return matchQuery && matchKelas && matchJK && matchAgama;
+      // BARU: Status match
+      const matchStatus = selectedStatus === 'Semua' || (student.status || 'Aktif') === selectedStatus;
+
+      return matchQuery && matchKelas && matchJK && matchAgama && matchStatus;
     });
-  }, [students, searchQuery, selectedKelas, selectedJK, selectedAgama]);
+  }, [students, searchQuery, selectedKelas, selectedJK, selectedAgama, selectedStatus]);
 
   // Pagination calculations
   const totalItems = filteredStudents.length;
@@ -450,13 +461,35 @@ export const BiodataView: React.FC<BiodataViewProps> = ({
               </div>
             )}
 
+            {/* BARU: Status Filter (Hanya Admin) */}
+            {!isUser && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-600 font-medium">Status:</span>
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => {
+                    setSelectedStatus(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                >
+                  {uniqueStatus.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Reset Filters */}
-            {(selectedKelas !== 'Semua' || selectedJK !== 'Semua' || (!isUser && selectedAgama !== 'Semua') || searchQuery) && (
+            {(selectedKelas !== 'Semua' || selectedJK !== 'Semua' || (!isUser && selectedAgama !== 'Semua') || (!isUser && selectedStatus !== 'Semua') || searchQuery) && (
               <button
                 onClick={() => {
                   setSelectedKelas('Semua');
                   setSelectedJK('Semua');
                   setSelectedAgama('Semua');
+                  setSelectedStatus('Semua'); // BARU: Reset Status
                   setSearchQuery('');
                   setCurrentPage(1);
                 }}
