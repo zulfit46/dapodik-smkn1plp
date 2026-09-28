@@ -173,6 +173,21 @@ export interface GTKData {
   nip?: string;
   statusKepegawaian?: string;
   jenisPtk?: string;
+  jenjang?: string;
+  tugasTambahan?: string;
+  jabatanPtk?: string;
+  jabatan_ptk?: string;
+  gelarDepan?: string;
+  gelarBelakang?: string;
+  jurusanProdi?: string;
+  sertifikasi?: string;
+  tmtKerja?: string;
+  mengajar?: string;
+  jamTugasTambahan?: string;
+  jjm?: string;
+  totalJjm?: string;
+  siswa?: string;
+  kompetensi?: string;
   agama?: string;
   alamatJalan?: string;
   rt?: string;
@@ -184,7 +199,6 @@ export interface GTKData {
   telepon?: string;
   hp?: string;
   email?: string;
-  tugasTambahan?: string;
   skCpns?: string;
   tanggalCpns?: string;
   skPengangkatan?: string;
@@ -311,12 +325,37 @@ export interface MutasiKeluarItem {
   rowIndex?: number;
 }
 
+export interface PembelajaranData {
+  id: string;
+  no?: string | number;
+  jenisRombel?: string;
+  tingkat?: string;
+  namaRombel?: string;
+  kurikulum?: string;
+  programKeahlian?: string;
+  namaPtk: string;
+  nuptk?: string;
+  ptkInduk?: string;
+  kepegawaian?: string;
+  namaMatpel?: string;
+  kodeMatpel?: string;
+  jjm?: string | number;
+  jmlSiswa?: string | number;
+  tglSkMengajar?: string;
+  skMengajar?: string;
+  statusDiKurikulum?: string;
+  rowIndex?: number;
+  [key: string]: any;
+}
+
 export type ActiveTab = 
   | 'dashboard' 
   | 'gtk' 
   | 'gtk-biodata' 
   | 'gtk-pangkat' 
   | 'gtk-kgb' 
+  | 'gtk-pembelajaran'
+  | 'pembelajaran'
   | 'akses-menu'
   | 'biodata' 
   | 'absen-pd'

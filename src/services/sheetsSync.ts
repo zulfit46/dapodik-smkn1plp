@@ -1,5 +1,6 @@
-import { Student, AppConfig, GTKData, RiwayatPangkat, RiwayatKGB, MutasiMasukItem, MutasiKeluarItem, normalizeStudent } from '../types';
-import { SPREADSHEET_ID, SHEET_NAME, SHEET_NAME_GTK, SHEET_NAME_NAIKPANGKAT, SHEET_NAME_KGB, SHEET_NAME_MUTASI_MASUK, SHEET_NAME_MUTASI_KELUAR, DRIVE_FOLDER_ID_MUTASI_KELUAR } from '../data/codeGsScript';
+import { Student, AppConfig, GTKData, RiwayatPangkat, RiwayatKGB, MutasiMasukItem, MutasiKeluarItem, PembelajaranData, normalizeStudent } from '../types';
+import { SPREADSHEET_ID, SHEET_NAME, SHEET_NAME_GTK, SHEET_NAME_NAIKPANGKAT, SHEET_NAME_KGB, SHEET_NAME_MUTASI_MASUK, SHEET_NAME_MUTASI_KELUAR, SHEET_NAME_PEMBELAJARAN, DRIVE_FOLDER_ID_MUTASI_KELUAR } from '../data/codeGsScript';
+import { INITIAL_PEMBELAJARAN_LIST } from '../data/initialPembelajaran';
 import { safeGetItem, safeSetItem } from '../utils/storage';
 import { formatToDDMMYYYY, parseToYYYYMMDD } from '../utils/dateUtils';
 
@@ -11,6 +12,7 @@ const LOCAL_STORAGE_PANGKAT_KEY = 'smkn1_riwayat_pangkat_data';
 const LOCAL_STORAGE_KGB_KEY = 'smkn1_riwayat_kgb_data';
 const LOCAL_STORAGE_MUTASI_MASUK_KEY = 'dapodik_cached_mutasi_masuk';
 const LOCAL_STORAGE_MUTASI_KELUAR_KEY = 'dapodik_cached_mutasi_keluar';
+const LOCAL_STORAGE_PEMBELAJARAN_KEY = 'dapodik_cached_pembelajaran';
 const LOCAL_STORAGE_CONFIG_KEY = 'dapodik_app_config';
 
 /**
@@ -261,6 +263,12 @@ export async function fetchGTKDirectly(config: AppConfig): Promise<GTKData[] | n
                 if (hClean === 'nip') obj.nip = strVal;
                 if (hClean === 'statuskepegawaian') obj.statusKepegawaian = strVal;
                 if (hClean === 'jenisptk') obj.jenisPtk = strVal;
+                if (hClean === 'jenjang') obj.jenjang = strVal;
+                if (hClean === 'tugastambahan') obj.tugasTambahan = strVal;
+                if (hClean === 'jabatanptk' || hClean === 'jabatan') {
+                  obj.jabatanPtk = strVal;
+                  obj.jabatan_ptk = strVal;
+                }
                 if (hClean === 'agama') obj.agama = strVal;
                 if (hClean === 'alamatjalan' || hClean === 'alamat') obj.alamatJalan = strVal;
                 if (hClean === 'rt') obj.rt = strVal;
@@ -338,7 +346,59 @@ export async function fetchGTKDirectly(config: AppConfig): Promise<GTKData[] | n
               }
             }
 
+            // Fetch and enrich with sheet 'ptk' data matched by NUPTK
             if (parsedGTK.length > 0) {
+              try {
+                const ptkGvizUrl = `https://docs.google.com/spreadsheets/d/${ssId}/gviz/tq?tqx=out:json&sheet=ptk&_t=${Date.now()}`;
+                const ptkRes = await fetch(ptkGvizUrl, { signal: AbortSignal.timeout(10000) });
+                if (ptkRes.ok) {
+                  const ptkText = await ptkRes.text();
+                  const ptkJsonText = ptkText.substring(ptkText.indexOf('{'), ptkText.lastIndexOf('}') + 1);
+                  if (ptkJsonText) {
+                    const parsedPtk = JSON.parse(ptkJsonText);
+                    const ptkRows = parsedPtk.table?.rows || [];
+                    if (ptkRows.length > 1) {
+                      const ptkHeaders = ptkRows[0].c.map((cell: any) => cell && cell.v !== null ? String(cell.v).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '');
+                      const nuptkCol = ptkHeaders.indexOf('nuptk');
+                      const jenjangCol = ptkHeaders.indexOf('jenjang');
+                      const tugasCol = ptkHeaders.indexOf('tugastambahan');
+                      const jabCol = ptkHeaders.indexOf('jabatanptk') >= 0 ? ptkHeaders.indexOf('jabatanptk') : ptkHeaders.indexOf('jabatan');
+
+                      if (nuptkCol >= 0) {
+                        const ptkMap = new Map<string, any>();
+                        for (let r = 1; r < ptkRows.length; r++) {
+                          const rCells = ptkRows[r].c;
+                          if (!rCells) continue;
+                          const rawNuptk = rCells[nuptkCol] && rCells[nuptkCol].v !== null ? String(rCells[nuptkCol].v).replace(/[^a-zA-Z0-9]/g, '').trim() : '';
+                          if (rawNuptk) {
+                            ptkMap.set(rawNuptk, {
+                              jenjang: jenjangCol >= 0 && rCells[jenjangCol] && rCells[jenjangCol].v !== null ? String(rCells[jenjangCol].v).trim() : '',
+                              tugasTambahan: tugasCol >= 0 && rCells[tugasCol] && rCells[tugasCol].v !== null ? String(rCells[tugasCol].v).trim() : '',
+                              jabatanPtk: jabCol >= 0 && rCells[jabCol] && rCells[jabCol].v !== null ? String(rCells[jabCol].v).trim() : ''
+                            });
+                          }
+                        }
+
+                        if (ptkMap.size > 0) {
+                          parsedGTK.forEach((gtk) => {
+                            const gNuptk = String(gtk.nuptk || '').replace(/[^a-zA-Z0-9]/g, '').trim();
+                            if (gNuptk && ptkMap.has(gNuptk)) {
+                              const ptkInfo = ptkMap.get(gNuptk);
+                              if (ptkInfo.jenjang) gtk.jenjang = ptkInfo.jenjang;
+                              if (ptkInfo.tugasTambahan) gtk.tugasTambahan = ptkInfo.tugasTambahan;
+                              if (ptkInfo.jabatanPtk) {
+                                gtk.jabatanPtk = ptkInfo.jabatanPtk;
+                                gtk.jabatan_ptk = ptkInfo.jabatanPtk;
+                              }
+                            }
+                          });
+                        }
+                      }
+                    }
+                  }
+                }
+              } catch {}
+
               safeSetItem(LOCAL_STORAGE_GTK_KEY, parsedGTK);
               return parsedGTK;
             }
@@ -1872,6 +1932,145 @@ export async function uploadMutasiBerkasToDrive(
     message: backendErrorMessage || ('Gagal mengunggah berkas ke Google Drive folder ID: ' + DRIVE_FOLDER_ID_MUTASI_KELUAR + '. Pastikan koneksi internet aktif dan Web App URL telah diset.')
   };
 }
+
+/**
+ * Fetch Pembelajaran from Google Sheets (sheet: pembelajaran) or Express backend
+ */
+export async function fetchPembelajaranDirectly(config: AppConfig, force: boolean = false): Promise<PembelajaranData[]> {
+  // 1. Try Express backend if available
+  try {
+    const res = await fetch(`/api/pembelajaran${force ? '?force=true' : ''}`, { signal: AbortSignal.timeout(6000) });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.status === 'success' && Array.isArray(json.data) && json.data.length > 0) {
+        safeSetItem(LOCAL_STORAGE_PEMBELAJARAN_KEY, json.data);
+        return json.data;
+      }
+    }
+  } catch {}
+
+  // 2. Direct read from Google Sheets GViz API
+  const ssId = config.spreadsheetId || SPREADSHEET_ID;
+  if (ssId) {
+    const candidates = [SHEET_NAME_PEMBELAJARAN || 'pembelajaran', 'Pembelajaran', 'PEMBELAJARAN'];
+    for (const sheetName of candidates) {
+      try {
+        const gvizUrl = `https://docs.google.com/spreadsheets/d/${ssId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&_t=${Date.now()}`;
+        const res = await fetch(gvizUrl, { signal: AbortSignal.timeout(12000) });
+        if (res.ok) {
+          const text = await res.text();
+          const jsonText = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+          if (jsonText) {
+            const parsed = JSON.parse(jsonText);
+            const rawRows = parsed.table?.rows || [];
+            const cols = parsed.table?.cols || [];
+            if (rawRows.length === 0) continue;
+
+            let headerRow: string[] = [];
+            let startIdx = 0;
+
+            const hasColLabels = cols.some((c: any) => c.label && c.label.trim() !== '');
+            if (hasColLabels) {
+              headerRow = cols.map((c: any) => (c.label || '').trim());
+              startIdx = 0;
+            } else {
+              headerRow = rawRows[0]?.c?.map((cell: any) => cell && cell.v !== null ? String(cell.v).trim() : '') || [];
+              startIdx = 1;
+            }
+
+            // Safety check
+            const headerRowStr = headerRow.join(' ').toLowerCase();
+            if (headerRowStr.includes('nisn') && headerRowStr.includes('nipd') && !headerRowStr.includes('matpel') && !headerRowStr.includes('pembelajaran')) {
+              continue; // Avoid wrong student sheet fallback
+            }
+
+            const parsedList: PembelajaranData[] = [];
+
+            for (let i = startIdx; i < rawRows.length; i++) {
+              const row = rawRows[i]?.c;
+              if (!row) continue;
+              const obj: any = { rowIndex: i + 1 };
+
+              headerRow.forEach((header: string, colIdx: number) => {
+                if (!header) return;
+                const cell = row[colIdx];
+                let strVal = '';
+                if (cell && cell.v !== null && cell.v !== undefined) {
+                  if (typeof cell.v === 'string' && cell.v.startsWith('Date(')) {
+                    if (cell.f) {
+                      strVal = cell.f;
+                    } else {
+                      const match = cell.v.match(/Date\((\d+),(\d+),(\d+)\)/);
+                      if (match) {
+                        const y = match[1];
+                        const m = String(Number(match[2]) + 1).padStart(2, '0');
+                        const d = String(match[3]).padStart(2, '0');
+                        strVal = `${y}-${m}-${d}`;
+                      } else {
+                        strVal = cell.v;
+                      }
+                    }
+                  } else {
+                    strVal = cell.f || String(cell.v).trim();
+                  }
+                }
+                obj[header] = strVal;
+                const hClean = String(header).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                if (hClean === 'no') obj.no = strVal;
+                if (hClean === 'jenisrombel' || hClean === 'rombeljenis') obj.jenisRombel = strVal;
+                if (hClean === 'tingkat' || hClean === 'kelas') obj.tingkat = strVal;
+                if (hClean === 'namarombel' || hClean === 'rombel') obj.namaRombel = strVal;
+                if (hClean === 'kurikulum') obj.kurikulum = strVal;
+                if (hClean === 'programkompetensikeahlian' || hClean === 'programkeahlian' || hClean === 'kompetensikeahlian' || hClean === 'jurusan') {
+                  obj.programKeahlian = strVal;
+                }
+                if (hClean === 'namaptk' || hClean === 'namaguru' || hClean === 'ptk' || (hClean === 'nama' && !obj.namaPtk)) {
+                  obj.namaPtk = strVal;
+                }
+                if (hClean === 'nuptk') obj.nuptk = strVal;
+                if (hClean === 'ptkinduk' || hClean === 'induk') obj.ptkInduk = strVal;
+                if (hClean === 'kepegawaian' || hClean === 'statuskepegawaian') obj.kepegawaian = strVal;
+                if (hClean === 'namamatpel' || hClean === 'matpel' || hClean === 'matapelajaran' || hClean === 'mapel') {
+                  obj.namaMatpel = strVal;
+                }
+                if (hClean === 'kodematpel' || hClean === 'kodemapel') obj.kodeMatpel = strVal;
+                if (hClean === 'jjm' || hClean === 'jammengajar') obj.jjm = strVal;
+                if (hClean === 'jmlsiswa' || hClean === 'jumlahsiswa' || hClean === 'siswa') obj.jmlSiswa = strVal;
+                if (hClean === 'tglskmengajar' || hClean === 'tglsk') obj.tglSkMengajar = parseToYYYYMMDD(strVal);
+                if (hClean === 'skmengajar' || hClean === 'nosk' || hClean === 'noskmengajar') obj.skMengajar = strVal;
+                if (hClean === 'statusdikurikulum' || hClean === 'statuskurikulum') obj.statusDiKurikulum = strVal;
+              });
+
+              if (obj.namaPtk || obj.namaMatpel || obj.namaRombel) {
+                obj.id = `PEMB-${obj.nuptk ? obj.nuptk + '-' : ''}${i}`;
+                parsedList.push(obj as PembelajaranData);
+              }
+            }
+
+            if (parsedList.length > 0) {
+              safeSetItem(LOCAL_STORAGE_PEMBELAJARAN_KEY, parsedList);
+              return parsedList;
+            }
+          }
+        }
+      } catch (err) {
+        // try next candidate
+      }
+    }
+  }
+
+  // 3. Fallback to cached data (filter out dummy seed data)
+  const cached = safeGetItem<PembelajaranData[] | null>(LOCAL_STORAGE_PEMBELAJARAN_KEY, null);
+  if (Array.isArray(cached) && cached.length > 0) {
+    const isDummy = cached.some(item => item.id === 'PEMB-001' && item.namaPtk?.includes('Hasnah'));
+    if (!isDummy) return cached;
+  }
+
+  // 4. Return empty array instead of dummy data
+  return [];
+}
+
 
 
 

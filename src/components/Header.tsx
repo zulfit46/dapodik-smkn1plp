@@ -49,6 +49,9 @@ export const Header: React.FC<HeaderProps> = ({
         return { title: 'Riwayat Kepangkatan GTK', subtitle: 'Form input & data riwayat kenaikan pangkat GTK (NIP, Nama, Gol, No SK, Tgl SK, TMT, Masa Kerja)' };
       case 'gtk-kgb':
         return { title: 'Riwayat Kenaikan Gaji Berkala (KGB) GTK', subtitle: 'Form input & data riwayat KGB GTK (NIP, Nama, Gol, No SK, Tgl SK, TMT, Masa Kerja, Gaji Pokok)' };
+      case 'gtk-pembelajaran':
+      case 'pembelajaran':
+        return { title: 'Pembelajaran & Beban Mengajar GTK', subtitle: 'Data pembagian tugas mengajar, SK mengajar, mata pelajaran, rombel, dan JJM guru dari sheet pembelajaran' };
       case 'akses-menu':
         return { title: 'Manajemen Akses Menu GTK', subtitle: 'Atur izin menu yang dapat diakses oleh masing-masing Guru & Tenaga Kependidikan' };
       case 'rekap':

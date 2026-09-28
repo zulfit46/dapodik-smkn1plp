@@ -1,10 +1,25 @@
 export const SPREADSHEET_ID = "1t_i5_kMDb00AT2uL0Km49_37CHJB2RWUv3tZjVgLlAk";
 export const SHEET_NAME = "data";
 export const SHEET_NAME_GTK = "gtk";
+export const SHEET_NAME_PTK = "ptk";
 export const SHEET_NAME_NAIKPANGKAT = "naikpangkat";
 export const SHEET_NAME_KGB = "kgb";
 export const SHEET_NAME_MUTASI_MASUK = "mutasi_masuk";
 export const SHEET_NAME_MUTASI_KELUAR = "mutasi_keluar";
+export const SHEET_NAME_PEMBELAJARAN = "pembelajaran";
+
+export const PTK_OFFICIAL_HEADERS = [
+  "No", "Nama", "NUPTK", "JK", "Tempat Lahir", "Tanggal Lahir", "NIP", "Status Kepegawaian",
+  "Jenis PTK", "Gelar Depan", "Gelar Belakang", "Jenjang", "Jurusan/Prodi", "Sertifikasi",
+  "TMT Kerja", "Tugas Tambahan", "Mengajar", "Jam Tugas Tambahan", "JJM", "Total JJM",
+  "Siswa", "Kompetensi", "Jabatan PTK"
+];
+
+export const PEMBELAJARAN_OFFICIAL_HEADERS = [
+  "No", "Jenis Rombel", "Tingkat", "Nama Rombel", "Kurikulum", "Program/Kompetensi Keahlian",
+  "Nama PTK", "NUPTK", "PTK Induk", "Kepegawaian", "Nama Matpel", "Kode Matpel",
+  "JJM", "Jml Siswa", "Tgl SK Mengajar", "SK Mengajar", "Status di Kurikulum"
+];
 
 export const GTK_OFFICIAL_HEADERS = [
   "No", "Nama", "NUPTK", "JK", "Tempat Lahir", "Tanggal Lahir", "NIP", "Status Kepegawaian",
@@ -54,6 +69,8 @@ export const CODE_GS_SCRIPT = `/**
 const SPREADSHEET_ID = "1t_i5_kMDb00AT2uL0Km49_37CHJB2RWUv3tZjVgLlAk";
 const SHEET_NAME_STUDENTS = "data";
 const SHEET_NAME_GTK = "gtk";
+const SHEET_NAME_PTK = "ptk";
+const SHEET_NAME_PEMBELAJARAN = "pembelajaran";
 const SHEET_NAME_NAIKPANGKAT = "naikpangkat";
 const SHEET_NAME_KGB = "kgb";
 const SHEET_NAME_MUTASI_MASUK = "mutasi_masuk";
@@ -166,6 +183,21 @@ const OFFICIAL_MUTASI_KELUAR_HEADERS = [
   "No", "NIPD", "NISN", "Nama", "Tempat_Lahir", "tgl_Lahir", "Rombel", "Ket_Mutasi", "Pindah_Ke", "tgl_mutasi", "alasan_mutasi", "upload_berkas", "Status", "Timestamp"
 ];
 
+// List Header Resmi PTK (sheet: ptk)
+const OFFICIAL_PTK_HEADERS = [
+  "No", "Nama", "NUPTK", "JK", "Tempat Lahir", "Tanggal Lahir", "NIP", "Status Kepegawaian",
+  "Jenis PTK", "Gelar Depan", "Gelar Belakang", "Jenjang", "Jurusan/Prodi", "Sertifikasi",
+  "TMT Kerja", "Tugas Tambahan", "Mengajar", "Jam Tugas Tambahan", "JJM", "Total JJM",
+  "Siswa", "Kompetensi", "Jabatan PTK"
+];
+
+// List Header Resmi Pembelajaran (sheet: pembelajaran)
+const OFFICIAL_PEMBELAJARAN_HEADERS = [
+  "No", "Jenis Rombel", "Tingkat", "Nama Rombel", "Kurikulum", "Program/Kompetensi Keahlian",
+  "Nama PTK", "NUPTK", "PTK Induk", "Kepegawaian", "Nama Matpel", "Kode Matpel",
+  "JJM", "Jml Siswa", "Tgl SK Mengajar", "SK Mengajar", "Status di Kurikulum"
+];
+
 function getSpreadsheet() {
   try {
     return SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -264,6 +296,42 @@ function getMutasiKeluarSheet() {
     sheet = ss.insertSheet(SHEET_NAME_MUTASI_KELUAR);
     sheet.appendRow(OFFICIAL_MUTASI_KELUAR_HEADERS);
     sheet.getRange(1, 1, 1, OFFICIAL_MUTASI_KELUAR_HEADERS.length).setFontWeight("bold").setBackground("#ffe4e6");
+  }
+  return sheet;
+}
+
+function getPtkSheet() {
+  const ss = getSpreadsheet();
+  const allSheets = ss.getSheets();
+  let sheet = allSheets.find(s => {
+    const name = s.getName().trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return name === "ptk" || name === "dataptk" || name === "biodataptk";
+  });
+  if (!sheet) {
+    sheet = ss.getSheetByName(SHEET_NAME_PTK);
+  }
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME_PTK);
+    sheet.appendRow(OFFICIAL_PTK_HEADERS);
+    sheet.getRange(1, 1, 1, OFFICIAL_PTK_HEADERS.length).setFontWeight("bold").setBackground("#e0f2fe");
+  }
+  return sheet;
+}
+
+function getPembelajaranSheet() {
+  const ss = getSpreadsheet();
+  const allSheets = ss.getSheets();
+  let sheet = allSheets.find(s => {
+    const name = s.getName().trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return name === "pembelajaran" || name === "jadwalpembelajaran" || name === "bebanmengajar";
+  });
+  if (!sheet) {
+    sheet = ss.getSheetByName(SHEET_NAME_PEMBELAJARAN);
+  }
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME_PEMBELAJARAN);
+    sheet.appendRow(OFFICIAL_PEMBELAJARAN_HEADERS);
+    sheet.getRange(1, 1, 1, OFFICIAL_PEMBELAJARAN_HEADERS.length).setFontWeight("bold").setBackground("#fef08a");
   }
   return sheet;
 }
@@ -367,7 +435,12 @@ function doGet(e) {
           if (hClean === "jk") obj["jk"] = strVal;
           if (hClean === "statuskepegawaian") obj["statusKepegawaian"] = strVal;
           if (hClean === "jenisptk") obj["jenisPtk"] = strVal;
+          if (hClean === "jenjang") obj["jenjang"] = strVal;
           if (hClean === "tugastambahan") obj["tugasTambahan"] = strVal;
+          if (hClean === "jabatanptk" || hClean === "jabatan") {
+            obj["jabatanPtk"] = strVal;
+            obj["jabatan_ptk"] = strVal;
+          }
           if (hClean === "pangkatgolongan") obj["pangkatGolongan"] = strVal;
           if (hClean === "nik") obj["nik"] = strVal;
           if (hClean === "hp" || hClean === "telepon") obj["hp"] = strVal;
@@ -406,11 +479,96 @@ function doGet(e) {
         return obj;
       });
 
+      // Sinkronisasi data dari sheet 'ptk' berdasarkan kunci NUPTK
+      try {
+        const ss = getSpreadsheet();
+        const ptkSheet = ss.getSheetByName("ptk") || ss.getSheetByName("PTK");
+        if (ptkSheet) {
+          const ptkData = ptkSheet.getDataRange().getValues();
+          if (ptkData.length > 1) {
+            const ptkHeaders = ptkData[0].map(h => String(h).trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
+            const nuptkIdx = ptkHeaders.indexOf("nuptk");
+            const jenjangIdx = ptkHeaders.indexOf("jenjang");
+            const tugasIdx = ptkHeaders.indexOf("tugastambahan");
+            const jabIdx = ptkHeaders.indexOf("jabatanptk") >= 0 ? ptkHeaders.indexOf("jabatanptk") : ptkHeaders.indexOf("jabatan");
+
+            if (nuptkIdx >= 0) {
+              const ptkMap = {};
+              for (let r = 1; r < ptkData.length; r++) {
+                const rRow = ptkData[r];
+                const cleanNuptk = String(rRow[nuptkIdx] || "").replace(/[^a-zA-Z0-9]/g, "").trim();
+                if (cleanNuptk && cleanNuptk !== "-") {
+                  ptkMap[cleanNuptk] = {
+                    jenjang: jenjangIdx >= 0 ? String(rRow[jenjangIdx] || "").trim() : "",
+                    tugasTambahan: tugasIdx >= 0 ? String(rRow[tugasIdx] || "").trim() : "",
+                    jabatanPtk: jabIdx >= 0 ? String(rRow[jabIdx] || "").trim() : ""
+                  };
+                }
+              }
+
+              gtkList.forEach(g => {
+                const gNuptk = String(g.nuptk || "").replace(/[^a-zA-Z0-9]/g, "").trim();
+                if (gNuptk && ptkMap[gNuptk]) {
+                  if (ptkMap[gNuptk].jenjang) g["jenjang"] = ptkMap[gNuptk].jenjang;
+                  if (ptkMap[gNuptk].tugasTambahan) g["tugasTambahan"] = ptkMap[gNuptk].tugasTambahan;
+                  if (ptkMap[gNuptk].jabatanPtk) {
+                    g["jabatanPtk"] = ptkMap[gNuptk].jabatanPtk;
+                    g["jabatan_ptk"] = ptkMap[gNuptk].jabatanPtk;
+                  }
+                }
+              });
+            }
+          }
+        }
+      } catch (errPTK) {
+        Logger.log("PTK enrichment error: " + errPTK.message);
+      }
+
       return responseJSON({
         status: "success",
         target: "gtk",
         total: gtkList.length,
         data: gtkList,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // 1b. DATA RAW PTK (sheet: ptk)
+    if (rawTarget === "ptk") {
+      const ss = getSpreadsheet();
+      const ptkSheet = ss.getSheetByName("ptk") || ss.getSheetByName("PTK");
+      if (!ptkSheet) {
+        return responseJSON({ status: "success", target: "ptk", total: 0, data: [] });
+      }
+      const ptkData = ptkSheet.getDataRange().getValues();
+      if (ptkData.length <= 1) {
+        return responseJSON({ status: "success", target: "ptk", total: 0, data: [] });
+      }
+      const ptkHeaders = ptkData[0].map(h => String(h).trim());
+      const ptkRows = ptkData.slice(1);
+      const listPtk = ptkRows.map((row, idx) => {
+        const item = { rowIndex: idx + 2 };
+        ptkHeaders.forEach((head, cIdx) => {
+          let v = row[cIdx];
+          if (v instanceof Date) v = formatToDDMMYYYY(v);
+          const s = v !== undefined && v !== null ? String(v).trim() : "";
+          item[head] = s;
+          const hc = String(head).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          item[hc] = s;
+          if (hc === "jenjang") item["jenjang"] = s;
+          if (hc === "tugastambahan") item["tugasTambahan"] = s;
+          if (hc === "jabatanptk" || hc === "jabatan") {
+            item["jabatanPtk"] = s;
+            item["jabatan_ptk"] = s;
+          }
+        });
+        return item;
+      });
+      return responseJSON({
+        status: "success",
+        target: "ptk",
+        total: listPtk.length,
+        data: listPtk,
         timestamp: new Date().toISOString()
       });
     }
@@ -607,6 +765,62 @@ function doGet(e) {
       return responseJSON({
         status: "success",
         target: "mutasi_keluar",
+        total: list.length,
+        data: list,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // 6. DATA PEMBELAJARAN
+    if (rawTarget === "pembelajaran" || rawTarget === "jadwalpembelajaran" || rawTarget === "bebanmengajar") {
+      const sheet = getPembelajaranSheet();
+      const data = sheet.getDataRange().getValues();
+      if (data.length <= 1) {
+        return responseJSON({ status: "success", target: "pembelajaran", total: 0, data: [] });
+      }
+      const headers = data[0].map(h => String(h).trim());
+      const rows = data.slice(1);
+      const list = rows.map((row, index) => {
+        const obj = { rowIndex: index + 2 };
+        headers.forEach((header, colIdx) => {
+          let val = row[colIdx];
+          if (val instanceof Date) {
+            val = formatToDDMMYYYY(val);
+          }
+          const strVal = val !== undefined && val !== null ? String(val).trim() : "";
+          obj[header] = strVal;
+          const hClean = String(header).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          obj[hClean] = strVal;
+
+          if (hClean === "no") obj["no"] = Number(strVal) || (index + 1);
+          if (hClean === "jenisrombel") obj["jenisRombel"] = strVal;
+          if (hClean === "tingkat") obj["tingkat"] = strVal;
+          if (hClean === "namarombel") obj["namaRombel"] = strVal;
+          if (hClean === "kurikulum") obj["kurikulum"] = strVal;
+          if (hClean === "programkompetensikeahlian" || hClean === "programkeahlian" || hClean === "kompetensikeahlian" || hClean === "jurusan") {
+            obj["programKeahlian"] = strVal;
+          }
+          if (hClean === "namaptk" || hClean === "namaguru" || hClean === "ptk" || (hClean === "nama" && !obj.namaPtk)) {
+            obj["namaPtk"] = strVal;
+          }
+          if (hClean === "nuptk") obj["nuptk"] = strVal;
+          if (hClean === "ptkinduk") obj["ptkInduk"] = strVal;
+          if (hClean === "kepegawaian") obj["kepegawaian"] = strVal;
+          if (hClean === "namamatpel" || hClean === "matpel" || hClean === "mapel") obj["namaMatpel"] = strVal;
+          if (hClean === "kodematpel" || hClean === "kodemapel") obj["kodeMatpel"] = strVal;
+          if (hClean === "jjm") obj["jjm"] = strVal;
+          if (hClean === "jmlsiswa") obj["jmlSiswa"] = strVal;
+          if (hClean === "tglskmengajar") obj["tglSkMengajar"] = formatToDDMMYYYY(strVal);
+          if (hClean === "skmengajar") obj["skMengajar"] = strVal;
+          if (hClean === "statusdikurikulum") obj["statusDiKurikulum"] = strVal;
+        });
+        obj.id = obj.id || "PEMB-" + (obj.nuptk ? obj.nuptk + "-" : "") + (index + 1);
+        return obj;
+      });
+
+      return responseJSON({
+        status: "success",
+        target: "pembelajaran",
         total: list.length,
         data: list,
         timestamp: new Date().toISOString()

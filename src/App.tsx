@@ -4,12 +4,13 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Student, AttendanceRecord, AppConfig, ActiveTab, WaliKelas, Jurusan, GTKData, AppTheme, normalizeStudent } from './types';
+import { Student, AttendanceRecord, AppConfig, ActiveTab, WaliKelas, Jurusan, GTKData, AppTheme, PembelajaranData, normalizeStudent } from './types';
 import { INITIAL_STUDENTS, INITIAL_ATTENDANCE } from './data/initialData';
 import { INITIAL_WALI_KELAS, INITIAL_WALI_KELAS_LIST } from './data/initialWaliKelas';
 import { INITIAL_JURUSAN_LIST } from './data/initialJurusan';
 import { INITIAL_GTK_LIST } from './data/initialGTK';
-import { fetchStudentsDirectly, syncVervalDirectly, saveStudentDirectly, fetchGTKDirectly } from './services/sheetsSync';
+import { INITIAL_PEMBELAJARAN_LIST } from './data/initialPembelajaran';
+import { fetchStudentsDirectly, syncVervalDirectly, saveStudentDirectly, fetchGTKDirectly, fetchPembelajaranDirectly } from './services/sheetsSync';
 import { safeGetItem, safeSetItem } from './utils/storage';
 import { isUserRole } from './utils/authUtils';
 import { DAPO1_BASE64 } from './assets/dapo1Base64';
@@ -25,6 +26,7 @@ import { MutasiView } from './components/MutasiView';
 import { GTKBiodataView } from './components/GTKBiodataView';
 import { GTKPangkatView } from './components/GTKPangkatView';
 import { GTKKGBView } from './components/GTKKGBView';
+import { PembelajaranView } from './components/PembelajaranView';
 import { RekapPDView } from './components/RekapPDView';
 import { RekapGTKView } from './components/RekapGTKView';
 import { AksesMenuView } from './components/AksesMenuView';
@@ -58,6 +60,15 @@ export default function App() {
 
   const [gtkList, setGtkList] = useState<GTKData[]>(() => {
     return safeGetItem<GTKData[]>('dapodik_cached_gtk', INITIAL_GTK_LIST);
+  });
+
+  const [pembelajaranList, setPembelajaranList] = useState<PembelajaranData[]>(() => {
+    const cached = safeGetItem<PembelajaranData[]>('dapodik_cached_pembelajaran', []);
+    if (Array.isArray(cached) && cached.length > 0) {
+      const isDummy = cached.some(item => item.id === 'PEMB-001' && item.namaPtk?.includes('Hasnah'));
+      if (!isDummy) return cached;
+    }
+    return [];
   });
 
   const [currentUser, setCurrentUser] = useState<GTKData | null>(() => {
@@ -187,6 +198,22 @@ export default function App() {
   // Fetch initial config and students from server or direct Google Sheets (for Vercel / static hosting)
   const fetchStudentsData = async (force = false) => {
     setIsRefreshing(true);
+
+    // Fetch Pembelajaran concurrently in background so it's ready immediately
+    const fetchPembPromise = fetchPembelajaranDirectly(appConfig, force)
+      .then(pembData => {
+        if (pembData && pembData.length > 0) {
+          const isDummy = pembData.some(item => item.id === 'PEMB-001' && item.namaPtk?.includes('Hasnah'));
+          if (!isDummy) {
+            setPembelajaranList(pembData);
+            safeSetItem('dapodik_cached_pembelajaran', pembData);
+          }
+        }
+      })
+      .catch(err => {
+        console.warn('Gagal memuat pembelajaran:', err);
+      });
+
     try {
       // 1. Try fetching config from server
       try {
@@ -320,6 +347,11 @@ export default function App() {
             return prevUser;
           });
         }
+      } catch {}
+
+      // 7. Get Pembelajaran (await parallel fetch)
+      try {
+        await fetchPembPromise;
       } catch {}
     } catch (error) {
       console.warn('Fetch data encountered an error:', error);
@@ -686,7 +718,16 @@ export default function App() {
           )}
 
           {(activeTab === 'gtk' || activeTab === 'gtk-biodata') && (
-            <GTKBiodataView gtkList={gtkList} currentUser={currentUser} />
+            <GTKBiodataView 
+              gtkList={gtkList} 
+              pembelajaranList={pembelajaranList}
+              currentUser={currentUser} 
+              onNavigateTab={(tab) => {
+                if (isTabPermitted(tab, currentUser, waliKelasList)) {
+                  setActiveTab(tab);
+                }
+              }}
+            />
           )}
 
           {activeTab === 'gtk-pangkat' && (
@@ -695,6 +736,18 @@ export default function App() {
 
           {activeTab === 'gtk-kgb' && (
             <GTKKGBView gtkList={gtkList} appConfig={appConfig} currentUser={currentUser} />
+          )}
+
+          {(activeTab === 'gtk-pembelajaran' || activeTab === 'pembelajaran') && (
+            <PembelajaranView
+              pembelajaranList={pembelajaranList}
+              gtkList={gtkList}
+              currentUser={currentUser}
+              theme={theme}
+              appConfig={appConfig}
+              onRefresh={() => fetchStudentsData(true)}
+              isRefreshing={isRefreshing}
+            />
           )}
 
           {activeTab === 'akses-menu' && (

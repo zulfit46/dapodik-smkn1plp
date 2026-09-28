@@ -401,9 +401,6 @@ export const AbsenPDView: React.FC<AbsenPDViewProps> = ({
                 <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
                   Download Absen Peserta Didik
                 </h2>
-                {/* <p className="text-xs text-slate-500">
-                  Format lembar presensi 18 pertemuan & rekap kehadiran (A, I, S)
-                </p> */}
               </div>
             </div>
           </div>
@@ -520,33 +517,18 @@ export const AbsenPDView: React.FC<AbsenPDViewProps> = ({
           </div>
         </div>
 
-        {/* Class Info Badges */}
+        {/* Class Info (Tanpa Highlight) */}
         {selectedKelas !== 'Semua' && (
-          <div className="mt-3.5 pt-3.5 border-t border-slate-100 flex flex-wrap items-center gap-3 text-xs">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-800 font-semibold border border-indigo-100">
-              <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
-              Program: <strong>{classMetadata.programKeahlian}</strong>
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800 font-semibold border border-purple-100">
-              Konsentrasi: <strong>{classMetadata.konsentrasiKeahlian}</strong>
-            </span>
-            {/* {classMetadata.waliKelas && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-medium border border-slate-200">
-                <UserCheck className="w-3.5 h-3.5 text-slate-600" />
-                Wali Kelas: <strong>{classMetadata.waliKelas.nama}</strong> (NIP. {classMetadata.waliKelas.nip || '-'})
-              </span>
-            )} */}
-            <div className="flex items-center gap-2 flex-wrap ml-auto">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 font-semibold border border-emerald-100">
-                <Users className="w-3.5 h-3.5 text-emerald-600" />
-                Total: {classMetadata.total} Siswa Aktif ({classMetadata.totalL} L, {classMetadata.totalP} P)
-              </span>
-              {classMetadata.totalInactive > 0 && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-[11px] font-medium border border-amber-200" title="Siswa dengan status Tidak Aktif (mutasi keluar/mengundurkan diri) otomatis tidak disertakan dalam lembar absen">
-                  <UserMinus className="w-3.5 h-3.5 text-amber-600" />
-                  {classMetadata.totalInactive} siswa mutasi keluar/tidak aktif
-                </span>
-              )}
+          <div className="mt-3.5 pt-3.5 border-t border-slate-100 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-700">
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-slate-600">Program Keahlian</span>
+              <span className="text-slate-400">:</span>
+              <span className="font-semibold text-slate-900">{classMetadata.programKeahlian}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-slate-600">Konsentrasi Keahlian</span>
+              <span className="text-slate-400">:</span>
+              <span className="font-semibold text-slate-900">{classMetadata.konsentrasiKeahlian}</span>
             </div>
           </div>
         )}

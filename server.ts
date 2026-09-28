@@ -7,7 +7,8 @@ import { INITIAL_WALI_KELAS_LIST, INITIAL_WALI_KELAS } from "./src/data/initialW
 import { INITIAL_JURUSAN_LIST } from "./src/data/initialJurusan.js";
 import { INITIAL_GTK_LIST } from "./src/data/initialGTK.js";
 import { INITIAL_RIWAYAT_PANGKAT, INITIAL_RIWAYAT_KGB } from "./src/data/initialPangkatKGB.js";
-import { Student, AttendanceRecord, AppConfig, WaliKelas, Jurusan, GTKData, RiwayatPangkat, RiwayatKGB, normalizeStudent } from "./src/types.js";
+import { INITIAL_PEMBELAJARAN_LIST } from "./src/data/initialPembelajaran.js";
+import { Student, AttendanceRecord, AppConfig, WaliKelas, Jurusan, GTKData, RiwayatPangkat, RiwayatKGB, PembelajaranData, normalizeStudent } from "./src/types.js";
 
 // In-memory data storage
 let studentList: Student[] = INITIAL_STUDENTS.map(normalizeStudent);
@@ -19,6 +20,8 @@ let cachedJurusanList: Jurusan[] = [...INITIAL_JURUSAN_LIST];
 let cachedGTKList: GTKData[] = [...INITIAL_GTK_LIST];
 let cachedPangkatList: RiwayatPangkat[] = [...INITIAL_RIWAYAT_PANGKAT];
 let cachedKGBList: RiwayatKGB[] = [...INITIAL_RIWAYAT_KGB];
+let cachedPembelajaranList: PembelajaranData[] = [];
+let isPembelajaranLoadedFromSheets = false;
 
 // Persistent Allowed Download Headers for GTK
 const HEADERS_CACHE_FILE = path.join(process.cwd(), 'gtk_download_headers.json');
@@ -409,6 +412,118 @@ async function fetchJurusanFromGoogleSheets(): Promise<Jurusan[]> {
 let fetchGTKPromise: Promise<GTKData[]> | null = null;
 let lastGTKFetchTime = 0;
 
+// Helper to fetch PTK data from sheet 'ptk' and map by NUPTK
+async function fetchPTKFromGoogleSheets(): Promise<Map<string, any>> {
+  const ptkMap = new Map<string, any>();
+  if (!appConfig.spreadsheetId) return ptkMap;
+
+  const candidates = ['ptk', 'PTK', 'Ptk'];
+  for (const sheetName of candidates) {
+    try {
+      const gvizUrl = `https://docs.google.com/spreadsheets/d/${appConfig.spreadsheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&_t=${Date.now()}`;
+      const res = await fetch(gvizUrl, {
+        signal: AbortSignal.timeout(15000),
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' }
+      });
+      if (res.ok) {
+        const text = await res.text();
+        const jsonText = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+        if (jsonText) {
+          const parsed = JSON.parse(jsonText);
+          const rawRows = parsed.table?.rows || [];
+          if (rawRows.length > 1) {
+            const headerRow = rawRows[0].c.map((cell: any) => cell && cell.v !== null ? String(cell.v).trim() : '');
+            for (let i = 1; i < rawRows.length; i++) {
+              const row = rawRows[i].c;
+              if (!row) continue;
+              const obj: any = {};
+              headerRow.forEach((header: string, colIdx: number) => {
+                if (!header) return;
+                const cell = row[colIdx];
+                let strVal = '';
+                if (cell && cell.v !== null && cell.v !== undefined) {
+                  if (typeof cell.v === 'string' && cell.v.startsWith('Date(')) {
+                    strVal = cell.f || cell.v;
+                  } else {
+                    strVal = String(cell.v).trim();
+                  }
+                }
+                obj[header] = strVal;
+                const hClean = String(header).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+                obj[hClean] = strVal;
+
+                if (hClean === 'no') obj.no = strVal;
+                if (hClean === 'nama') obj.nama = strVal;
+                if (hClean === 'nuptk') obj.nuptk = strVal;
+                if (hClean === 'jk') obj.jk = strVal;
+                if (hClean === 'tempatlahir' || hClean === 'tlahir') obj.tempatLahir = strVal;
+                if (hClean === 'tanggallahir' || hClean === 'tgllahir') obj.tanggalLahir = strVal;
+                if (hClean === 'nip') obj.nip = strVal;
+                if (hClean === 'statuskepegawaian') obj.statusKepegawaian = strVal;
+                if (hClean === 'jenisptk') obj.jenisPtk = strVal;
+                if (hClean === 'gelardepan') obj.gelarDepan = strVal;
+                if (hClean === 'gelarbelakang') obj.gelarBelakang = strVal;
+                if (hClean === 'jenjang') obj.jenjang = strVal;
+                if (hClean === 'jurusanprodi' || hClean === 'jurusan' || hClean === 'prodi') obj.jurusanProdi = strVal;
+                if (hClean === 'sertifikasi') obj.sertifikasi = strVal;
+                if (hClean === 'tmtkerja') obj.tmtKerja = strVal;
+                if (hClean === 'tugastambahan') obj.tugasTambahan = strVal;
+                if (hClean === 'mengajar') obj.mengajar = strVal;
+                if (hClean === 'jamtugastambahan' || hClean === 'jamtugas') obj.jamTugasTambahan = strVal;
+                if (hClean === 'jjm') obj.jjm = strVal;
+                if (hClean === 'totaljjm') obj.totalJjm = strVal;
+                if (hClean === 'siswa') obj.siswa = strVal;
+                if (hClean === 'kompetensi') obj.kompetensi = strVal;
+                if (hClean === 'nik') obj.nik = strVal;
+                if (hClean === 'jabatanptk' || hClean === 'jabatan') {
+                  obj.jabatanPtk = strVal;
+                  obj.jabatan_ptk = strVal;
+                }
+              });
+
+              const cleanNuptk = String(obj.nuptk || '').replace(/[^a-zA-Z0-9]/g, '').trim();
+              if (cleanNuptk && cleanNuptk !== '-') {
+                ptkMap.set(cleanNuptk, obj);
+              }
+            }
+
+            if (ptkMap.size > 0) {
+              console.log(`[PTK Sync] Sukses membaca ${ptkMap.size} baris dari sheet '${sheetName}' untuk penggabungan NUPTK.`);
+              break;
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      // lanjut ke kandidat berikutnya jika gagal
+    }
+  }
+
+  // Fallback ke Web App jika GViz gagal
+  if (ptkMap.size === 0 && appConfig.webAppUrl) {
+    try {
+      const url = appConfig.webAppUrl + (appConfig.webAppUrl.includes('?') ? '&' : '?') + 'sheet=ptk&_t=' + Date.now();
+      const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.status === 'success' && Array.isArray(json.data)) {
+          json.data.forEach((item: any) => {
+            const cleanNuptk = String(item.nuptk || '').replace(/[^a-zA-Z0-9]/g, '').trim();
+            if (cleanNuptk && cleanNuptk !== '-') {
+              ptkMap.set(cleanNuptk, item);
+            }
+          });
+          console.log(`[PTK Sync] Sukses membaca ${ptkMap.size} baris PTK via Web App fallback.`);
+        }
+      }
+    } catch (err) {
+      console.warn("Fallback Web App PTK fetch failed:", err);
+    }
+  }
+
+  return ptkMap;
+}
+
 async function fetchGTKFromGoogleSheets(forceRefresh = false): Promise<GTKData[]> {
   const now = Date.now();
   // Jika tidak dipaksa dan cache masih segar (kurang dari 10 detik), gunakan cachedGTKList
@@ -421,6 +536,8 @@ async function fetchGTKFromGoogleSheets(forceRefresh = false): Promise<GTKData[]
   }
 
   fetchGTKPromise = (async () => {
+    let parsedGTK: GTKData[] = [];
+
     // 1. Coba lewat GViz Google Sheets API (jika ada spreadsheetId)
     if (appConfig.spreadsheetId) {
       try {
@@ -439,7 +556,6 @@ async function fetchGTKFromGoogleSheets(forceRefresh = false): Promise<GTKData[]
 
             if (rawRows.length > 1) {
               const headerRow = rawRows[0].c.map((cell: any) => cell && cell.v !== null ? String(cell.v).trim() : '');
-              const parsedGTK: GTKData[] = [];
 
               for (let i = 1; i < rawRows.length; i++) {
                 const row = rawRows[i].c;
@@ -470,6 +586,12 @@ async function fetchGTKFromGoogleSheets(forceRefresh = false): Promise<GTKData[]
                   if (hClean === 'nip') obj.nip = strVal;
                   if (hClean === 'statuskepegawaian') obj.statusKepegawaian = strVal;
                   if (hClean === 'jenisptk') obj.jenisPtk = strVal;
+                  if (hClean === 'jenjang') obj.jenjang = strVal;
+                  if (hClean === 'tugastambahan') obj.tugasTambahan = strVal;
+                  if (hClean === 'jabatanptk' || hClean === 'jabatan') {
+                    obj.jabatanPtk = strVal;
+                    obj.jabatan_ptk = strVal;
+                  }
                   if (hClean === 'agama') obj.agama = strVal;
                   if (hClean === 'alamatjalan' || hClean === 'alamat') obj.alamatJalan = strVal;
                   if (hClean === 'rt') obj.rt = strVal;
@@ -481,7 +603,6 @@ async function fetchGTKFromGoogleSheets(forceRefresh = false): Promise<GTKData[]
                   if (hClean === 'telepon') obj.telepon = strVal;
                   if (hClean === 'hp' || hClean === 'nohp') obj.hp = strVal;
                   if (hClean === 'email') obj.email = strVal;
-                  if (hClean === 'tugastambahan') obj.tugasTambahan = strVal;
                   if (hClean === 'skcpns') obj.skCpns = strVal;
                   if (hClean === 'tanggalcpns') obj.tanggalCpns = strVal;
                   if (hClean === 'skpengangkatan') obj.skPengangkatan = strVal;
@@ -546,13 +667,6 @@ async function fetchGTKFromGoogleSheets(forceRefresh = false): Promise<GTKData[]
                   parsedGTK.push(obj as GTKData);
                 }
               }
-
-              if (parsedGTK.length > 0) {
-                cachedGTKList = parsedGTK;
-                lastGTKFetchTime = Date.now();
-                console.log(`Successfully fetched ${parsedGTK.length} GTK entries from sheet 'gtk'!`);
-                return parsedGTK;
-              }
             }
           }
         }
@@ -565,8 +679,8 @@ async function fetchGTKFromGoogleSheets(forceRefresh = false): Promise<GTKData[]
       }
     }
 
-    // 2. Fallback: Coba lewat Google Apps Script Web App (?sheet=gtk)
-    if (appConfig.webAppUrl) {
+    // 2. Fallback: Coba lewat Google Apps Script Web App (?sheet=gtk) jika parsedGTK masih kosong
+    if (parsedGTK.length === 0 && appConfig.webAppUrl) {
       try {
         console.log('Fetching GTK via Google Apps Script Web App...');
         const url = appConfig.webAppUrl + (appConfig.webAppUrl.includes('?') ? '&' : '?') + 'sheet=gtk&_t=' + Date.now();
@@ -574,15 +688,132 @@ async function fetchGTKFromGoogleSheets(forceRefresh = false): Promise<GTKData[]
         if (res.ok) {
           const json = await res.json();
           if (json && json.status === 'success' && Array.isArray(json.data) && json.data.length > 0) {
-            cachedGTKList = json.data;
-            lastGTKFetchTime = Date.now();
+            parsedGTK = json.data;
             console.log(`Successfully fetched ${json.data.length} GTK entries via Web App!`);
-            return json.data;
           }
         }
       } catch (err) {
         console.warn('Fallback Web App GTK fetch failed:', err);
       }
+    }
+
+    // 3. SINKRONISASI SHEET 'ptk': Gabungkan data Jenjang, Tugas Tambahan, Jabatan PTK berdasarkan NUPTK
+    try {
+      const ptkMap = await fetchPTKFromGoogleSheets();
+      if (ptkMap.size > 0) {
+        console.log(`[PTK Sync] Menggabungkan ${ptkMap.size} data PTK ke daftar GTK dengan kunci NUPTK...`);
+        
+        // A. Jika ada parsedGTK, perkaya atribut jenjang, tugasTambahan, jabatanPtk
+        if (parsedGTK.length > 0) {
+          parsedGTK.forEach((gtk) => {
+            const cleanNuptk = String(gtk.nuptk || '').replace(/[^a-zA-Z0-9]/g, '').trim();
+            if (cleanNuptk && ptkMap.has(cleanNuptk)) {
+              const ptk = ptkMap.get(cleanNuptk);
+              if (ptk.jenjang) gtk.jenjang = ptk.jenjang;
+              if (ptk.tugasTambahan) gtk.tugasTambahan = ptk.tugasTambahan;
+              if (ptk.jabatanPtk || ptk.jabatan_ptk) {
+                gtk.jabatanPtk = ptk.jabatanPtk || ptk.jabatan_ptk;
+                gtk.jabatan_ptk = ptk.jabatanPtk || ptk.jabatan_ptk;
+              }
+              if (ptk.gelarDepan) gtk.gelarDepan = ptk.gelarDepan;
+              if (ptk.gelarBelakang) gtk.gelarBelakang = ptk.gelarBelakang;
+              if (ptk.jurusanProdi) gtk.jurusanProdi = ptk.jurusanProdi;
+              if (ptk.sertifikasi) gtk.sertifikasi = ptk.sertifikasi;
+              if (ptk.tmtKerja) gtk.tmtKerja = ptk.tmtKerja;
+              if (ptk.mengajar) gtk.mengajar = ptk.mengajar;
+              if (ptk.jamTugasTambahan) gtk.jamTugasTambahan = ptk.jamTugasTambahan;
+              if (ptk.jjm) gtk.jjm = ptk.jjm;
+              if (ptk.totalJjm) gtk.totalJjm = ptk.totalJjm;
+              if (ptk.siswa) gtk.siswa = ptk.siswa;
+              if (ptk.kompetensi) gtk.kompetensi = ptk.kompetensi;
+            }
+          });
+
+          // Cek apakah ada record PTK yang belum ada di parsedGTK (berdasarkan NUPTK)
+          const existingNuptks = new Set(
+            parsedGTK.map(g => String(g.nuptk || '').replace(/[^a-zA-Z0-9]/g, '').trim()).filter(Boolean)
+          );
+          ptkMap.forEach((ptk, nuptkKey) => {
+            if (!existingNuptks.has(nuptkKey) && ptk.nama) {
+              parsedGTK.push({
+                id: ptk.nip && ptk.nip !== '-' ? ptk.nip : nuptkKey,
+                nama: ptk.nama,
+                nuptk: ptk.nuptk || nuptkKey,
+                jk: ptk.jk || 'L',
+                tempatLahir: ptk.tempatLahir || '-',
+                tanggalLahir: ptk.tanggalLahir || '-',
+                nip: ptk.nip || '-',
+                statusKepegawaian: ptk.statusKepegawaian || '-',
+                jenisPtk: ptk.jenisPtk || '-',
+                jenjang: ptk.jenjang || '-',
+                tugasTambahan: ptk.tugasTambahan || '-',
+                jabatanPtk: ptk.jabatanPtk || ptk.jabatan_ptk || '-',
+                jabatan_ptk: ptk.jabatanPtk || ptk.jabatan_ptk || '-',
+                nik: ptk.nik || '-',
+                hp: ptk.hp || '-',
+                alamatJalan: ptk.alamatJalan || '-',
+                agama: ptk.agama || 'Islam',
+                gelarDepan: ptk.gelarDepan || '',
+                gelarBelakang: ptk.gelarBelakang || '',
+                jurusanProdi: ptk.jurusanProdi || '',
+                sertifikasi: ptk.sertifikasi || '',
+                tmtKerja: ptk.tmtKerja || '',
+                mengajar: ptk.mengajar || '',
+                jamTugasTambahan: ptk.jamTugasTambahan || '',
+                jjm: ptk.jjm || '',
+                totalJjm: ptk.totalJjm || '',
+                siswa: ptk.siswa || '',
+                kompetensi: ptk.kompetensi || ''
+              } as GTKData);
+            }
+          });
+        } else {
+          // B. Jika sheet 'gtk' kosong tetapi sheet 'ptk' ada isinya, buat GTK dari sheet 'ptk'
+          ptkMap.forEach((ptk, nuptkKey) => {
+            if (ptk.nama) {
+              parsedGTK.push({
+                id: ptk.nip && ptk.nip !== '-' ? ptk.nip : nuptkKey,
+                nama: ptk.nama,
+                nuptk: ptk.nuptk || nuptkKey,
+                jk: ptk.jk || 'L',
+                tempatLahir: ptk.tempatLahir || '-',
+                tanggalLahir: ptk.tanggalLahir || '-',
+                nip: ptk.nip || '-',
+                statusKepegawaian: ptk.statusKepegawaian || '-',
+                jenisPtk: ptk.jenisPtk || '-',
+                jenjang: ptk.jenjang || '-',
+                tugasTambahan: ptk.tugasTambahan || '-',
+                jabatanPtk: ptk.jabatanPtk || ptk.jabatan_ptk || '-',
+                jabatan_ptk: ptk.jabatanPtk || ptk.jabatan_ptk || '-',
+                nik: ptk.nik || '-',
+                hp: ptk.hp || '-',
+                alamatJalan: ptk.alamatJalan || '-',
+                agama: ptk.agama || 'Islam',
+                gelarDepan: ptk.gelarDepan || '',
+                gelarBelakang: ptk.gelarBelakang || '',
+                jurusanProdi: ptk.jurusanProdi || '',
+                sertifikasi: ptk.sertifikasi || '',
+                tmtKerja: ptk.tmtKerja || '',
+                mengajar: ptk.mengajar || '',
+                jamTugasTambahan: ptk.jamTugasTambahan || '',
+                jjm: ptk.jjm || '',
+                totalJjm: ptk.totalJjm || '',
+                siswa: ptk.siswa || '',
+                kompetensi: ptk.kompetensi || ''
+              } as GTKData);
+            }
+          });
+        }
+      }
+    } catch (ptkErr) {
+      console.warn('Gagal sinkronisasi data sheet PTK:', ptkErr);
+    }
+
+    if (parsedGTK.length > 0) {
+      cachedGTKList = parsedGTK;
+      lastGTKFetchTime = Date.now();
+      console.log(`Total data GTK terkelola: ${parsedGTK.length} orang.`);
+      return parsedGTK;
     }
 
     return cachedGTKList;
@@ -945,6 +1176,135 @@ async function fetchKGBFromGoogleSheets(): Promise<RiwayatKGB[]> {
   return fetchKGBPromise;
 }
 
+// Helper to fetch Pembelajaran from Google Sheets (sheet: pembelajaran)
+let fetchPembelajaranPromise: Promise<PembelajaranData[]> | null = null;
+async function fetchPembelajaranFromGoogleSheets(force: boolean = false): Promise<PembelajaranData[]> {
+  if (!force && isPembelajaranLoadedFromSheets && cachedPembelajaranList.length > 0) {
+    return cachedPembelajaranList;
+  }
+
+  if (fetchPembelajaranPromise) {
+    return fetchPembelajaranPromise;
+  }
+
+  fetchPembelajaranPromise = (async () => {
+    if (appConfig.spreadsheetId) {
+      const candidates = ["pembelajaran", "Pembelajaran", "PEMBELAJARAN"];
+      for (const sheetName of candidates) {
+        try {
+          const gvizUrl = `https://docs.google.com/spreadsheets/d/${appConfig.spreadsheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&_t=${Date.now()}`;
+          const res = await fetch(gvizUrl, { signal: AbortSignal.timeout(12000) });
+          if (res.ok) {
+            const text = await res.text();
+            const jsonText = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+            if (jsonText) {
+              const parsed = JSON.parse(jsonText);
+              const rawRows = parsed.table?.rows || [];
+              const cols = parsed.table?.cols || [];
+              if (rawRows.length === 0) continue;
+
+              let headerRow: string[] = [];
+              let startIdx = 0;
+
+              const hasColLabels = cols.some((c: any) => c.label && c.label.trim() !== "");
+              if (hasColLabels) {
+                headerRow = cols.map((c: any) => (c.label || "").trim());
+                startIdx = 0;
+              } else {
+                headerRow = rawRows[0]?.c?.map((cell: any) => cell && cell.v !== null ? String(cell.v).trim() : '') || [];
+                startIdx = 1;
+              }
+
+              const headerRowStr = headerRow.join(" ").toLowerCase();
+              if (headerRowStr.includes("nisn") && headerRowStr.includes("nipd") && !headerRowStr.includes("matpel")) {
+                continue;
+              }
+
+              const parsedList: PembelajaranData[] = [];
+              for (let i = startIdx; i < rawRows.length; i++) {
+                const row = rawRows[i]?.c;
+                if (!row) continue;
+                const obj: any = { rowIndex: i + 1 };
+
+                headerRow.forEach((header: string, colIdx: number) => {
+                  if (!header) return;
+                  const cell = row[colIdx];
+                  let strVal = '';
+                  if (cell && cell.v !== null && cell.v !== undefined) {
+                    strVal = cell.f || String(cell.v).trim();
+                  }
+                  obj[header] = strVal;
+                  const hClean = String(header).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                  if (hClean === 'no') obj.no = strVal;
+                  if (hClean === 'jenisrombel' || hClean === 'rombeljenis') obj.jenisRombel = strVal;
+                  if (hClean === 'tingkat' || hClean === 'kelas') obj.tingkat = strVal;
+                  if (hClean === 'namarombel' || hClean === 'rombel') obj.namaRombel = strVal;
+                  if (hClean === 'kurikulum') obj.kurikulum = strVal;
+                  if (hClean === 'programkompetensikeahlian' || hClean === 'programkeahlian' || hClean === 'kompetensikeahlian' || hClean === 'jurusan') {
+                    obj.programKeahlian = strVal;
+                  }
+                  if (hClean === 'namaptk' || hClean === 'namaguru' || hClean === 'ptk' || (hClean === 'nama' && !obj.namaPtk)) {
+                    obj.namaPtk = strVal;
+                  }
+                  if (hClean === 'nuptk') obj.nuptk = strVal;
+                  if (hClean === 'ptkinduk' || hClean === 'induk') obj.ptkInduk = strVal;
+                  if (hClean === 'kepegawaian' || hClean === 'statuskepegawaian') obj.kepegawaian = strVal;
+                  if (hClean === 'namamatpel' || hClean === 'matpel' || hClean === 'matapelajaran' || hClean === 'mapel') {
+                    obj.namaMatpel = strVal;
+                  }
+                  if (hClean === 'kodematpel' || hClean === 'kodemapel') obj.kodeMatpel = strVal;
+                  if (hClean === 'jjm' || hClean === 'jammengajar') obj.jjm = strVal;
+                  if (hClean === 'jmlsiswa' || hClean === 'jumlahsiswa' || hClean === 'siswa') obj.jmlSiswa = strVal;
+                  if (hClean === 'tglskmengajar' || hClean === 'tglsk') obj.tglSkMengajar = strVal;
+                  if (hClean === 'skmengajar' || hClean === 'nosk' || hClean === 'noskmengajar') obj.skMengajar = strVal;
+                  if (hClean === 'statusdikurikulum' || hClean === 'statuskurikulum') obj.statusDiKurikulum = strVal;
+                });
+
+                if (obj.namaPtk || obj.namaMatpel || obj.namaRombel) {
+                  obj.id = `PEMB-${obj.nuptk ? obj.nuptk + '-' : ''}${i}`;
+                  parsedList.push(obj as PembelajaranData);
+                }
+              }
+
+              if (parsedList.length > 0) {
+                cachedPembelajaranList = parsedList;
+                isPembelajaranLoadedFromSheets = true;
+                console.log(`Successfully fetched ${parsedList.length} pembelajaran rows from sheet '${sheetName}' via GViz!`);
+                return parsedList;
+              }
+            }
+          }
+        } catch (err: any) {
+          // continue
+        }
+      }
+    }
+
+    // Fallback: Google Apps Script Web App (?sheet=pembelajaran)
+    if (appConfig.webAppUrl) {
+      try {
+        const url = appConfig.webAppUrl + (appConfig.webAppUrl.includes('?') ? '&' : '?') + 'sheet=pembelajaran&_t=' + Date.now();
+        const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.status === 'success' && Array.isArray(json.data) && json.data.length > 0) {
+            cachedPembelajaranList = json.data;
+            isPembelajaranLoadedFromSheets = true;
+            return json.data;
+          }
+        }
+      } catch (err) {}
+    }
+
+    return cachedPembelajaranList;
+  })().finally(() => {
+    fetchPembelajaranPromise = null;
+  });
+
+  return fetchPembelajaranPromise;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -975,6 +1335,31 @@ async function startServer() {
       cachedGTKList = [];
     }
     const list = await fetchGTKFromGoogleSheets(isForce);
+    res.json({
+      status: "success",
+      total: list.length,
+      data: list
+    });
+  });
+
+  // GET Raw PTK Data from sheet 'ptk'
+  app.get("/api/ptk", async (req, res) => {
+    const ptkMap = await fetchPTKFromGoogleSheets();
+    const list = Array.from(ptkMap.values());
+    res.json({
+      status: "success",
+      total: list.length,
+      data: list
+    });
+  });
+
+  // GET Pembelajaran Data from sheet 'pembelajaran'
+  app.get("/api/pembelajaran", async (req, res) => {
+    const isForce = req.query.force === 'true';
+    if (isForce) {
+      cachedPembelajaranList = [];
+    }
+    const list = await fetchPembelajaranFromGoogleSheets(isForce);
     res.json({
       status: "success",
       total: list.length,
@@ -2396,7 +2781,13 @@ async function startServer() {
       try {
         await fetchJurusanFromGoogleSheets();
       } catch {}
-    }, 1000);
+      try {
+        await fetchGTKFromGoogleSheets();
+      } catch {}
+      try {
+        await fetchPembelajaranFromGoogleSheets();
+      } catch {}
+    }, 500);
   });
 }
 

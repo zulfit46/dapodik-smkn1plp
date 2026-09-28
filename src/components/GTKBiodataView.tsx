@@ -12,24 +12,31 @@ import {
   GraduationCap,
   Shield,
   Award,
-  Users
+  Users,
+  BarChart3,
+  BookOpen
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { GTKData } from '../types';
+import { GTKData, PembelajaranData } from '../types';
 import { INITIAL_GTK_LIST } from '../data/initialGTK';
 import { GTKDetailModal } from './GTKDetailModal';
+import { GTKProfileCard } from './GTKProfileCard';
 import { isUserRole, isOwnerOfRecord } from '../utils/authUtils';
 
 interface GTKBiodataViewProps {
   gtkList?: GTKData[];
+  pembelajaranList?: PembelajaranData[];
   currentUser?: GTKData | null;
+  onNavigateTab?: (tab: any) => void;
 }
 
 export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({ 
   gtkList = INITIAL_GTK_LIST,
-  currentUser
+  pembelajaranList = [],
+  currentUser,
+  onNavigateTab
 }) => {
   const isUser = isUserRole(currentUser);
 
@@ -43,10 +50,21 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
     return gtkList;
   }, [gtkList, isUser, currentUser]);
 
+  // User's GTK record for detailed profile view
+  const userGtk = useMemo(() => {
+    if (!currentUser) return null;
+    const found = gtkList.find((g) => isOwnerOfRecord(g.nip, g.nama, currentUser));
+    if (found) {
+      return { ...currentUser, ...found };
+    }
+    return currentUser;
+  }, [gtkList, currentUser]);
+
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('Semua');
   const [selectedJenisPtk, setSelectedJenisPtk] = useState<string>('Semua');
+  const [selectedJenjang, setSelectedJenjang] = useState<string>('Semua');
   const [selectedJK, setSelectedJK] = useState<string>('Semua');
   const [selectedAgama, setSelectedAgama] = useState<string>('Semua');
 
@@ -64,6 +82,9 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
     nip: true,
     statusKepegawaian: true,
     jenisPtk: true,
+    jenjang: true,
+    tugasTambahan: true,
+    jabatanPtk: true,
     agama: true,
     alamatJalan: true,
     hp: true
@@ -71,6 +92,26 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
 
   const [showColumnToggle, setShowColumnToggle] = useState(false);
   const [selectedGTKDetail, setSelectedGTKDetail] = useState<GTKData | null>(null);
+
+  const formatColumnLabel = (key: string) => {
+    switch (key) {
+      case 'nama': return 'Nama Lengkap';
+      case 'nuptk': return 'NUPTK';
+      case 'jk': return 'Jenis Kelamin';
+      case 'tempatLahir': return 'Tempat Lahir';
+      case 'tanggalLahir': return 'Tanggal Lahir';
+      case 'nip': return 'NIP';
+      case 'statusKepegawaian': return 'Status Kepegawaian';
+      case 'jenisPtk': return 'Jenis PTK';
+      case 'jenjang': return 'Jenjang';
+      case 'tugasTambahan': return 'Tugas Tambahan';
+      case 'jabatanPtk': return 'Jabatan PTK';
+      case 'agama': return 'Agama';
+      case 'alamatJalan': return 'Alamat Jalan';
+      case 'hp': return 'No HP';
+      default: return key.replace(/([A-Z])/g, ' $1');
+    }
+  };
 
   // Unique lists for dropdown filters
   const uniqueStatus = useMemo(() => {
@@ -81,6 +122,12 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
 
   const uniqueJenisPtk = useMemo(() => {
     const list = effectiveGtkList.map((g) => (g.jenisPtk || '').trim()).filter(Boolean);
+    const set = new Set<string>(list);
+    return ['Semua', ...Array.from(set).sort()];
+  }, [effectiveGtkList]);
+
+  const uniqueJenjang = useMemo(() => {
+    const list = effectiveGtkList.map((g) => (g.jenjang || '').trim()).filter(Boolean);
     const set = new Set<string>(list);
     return ['Semua', ...Array.from(set).sort()];
   }, [effectiveGtkList]);
@@ -103,7 +150,9 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
         (gtk.nik || '').includes(q) ||
         (gtk.alamatJalan || '').toLowerCase().includes(q) ||
         (gtk.tempatLahir || '').toLowerCase().includes(q) ||
-        (gtk.tugasTambahan || '').toLowerCase().includes(q);
+        (gtk.jenjang || '').toLowerCase().includes(q) ||
+        (gtk.tugasTambahan || '').toLowerCase().includes(q) ||
+        (gtk.jabatanPtk || gtk.jabatan_ptk || '').toLowerCase().includes(q);
 
       const matchStatus =
         selectedStatus === 'Semua' || (gtk.statusKepegawaian || '').trim() === selectedStatus;
@@ -111,15 +160,18 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
       const matchJenis =
         selectedJenisPtk === 'Semua' || (gtk.jenisPtk || '').trim() === selectedJenisPtk;
 
+      const matchJenjang =
+        selectedJenjang === 'Semua' || (gtk.jenjang || '').trim() === selectedJenjang;
+
       const matchJK =
         selectedJK === 'Semua' || gtk.jk === selectedJK;
 
       const matchAgama =
         selectedAgama === 'Semua' || (gtk.agama || '').trim() === selectedAgama;
 
-      return matchQuery && matchStatus && matchJenis && matchJK && matchAgama;
+      return matchQuery && matchStatus && matchJenis && matchJenjang && matchJK && matchAgama;
     });
-  }, [effectiveGtkList, searchQuery, selectedStatus, selectedJenisPtk, selectedJK, selectedAgama]);
+  }, [effectiveGtkList, searchQuery, selectedStatus, selectedJenisPtk, selectedJenjang, selectedJK, selectedAgama]);
 
   // Pagination calculations
   const totalItems = filteredGTK.length;
@@ -147,7 +199,9 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
       'NIP': g.nip || '-',
       'Status Kepegawaian': g.statusKepegawaian || '-',
       'Jenis PTK': g.jenisPtk || '-',
+      'Jenjang': g.jenjang || '-',
       'Tugas Tambahan': g.tugasTambahan || '-',
+      'Jabatan PTK': g.jabatanPtk || g.jabatan_ptk || '-',
       'Pangkat Golongan': g.pangkatGolongan || '-',
       'Agama': g.agama || '-',
       'Alamat Jalan': g.alamatJalan || '-',
@@ -206,39 +260,49 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
       g.nama || '-',
       g.nuptk || '-',
       g.jk || '-',
-      `${g.tempatLahir || '-'}, ${g.tanggalLahir || '-'}`,
       g.nip || '-',
       g.statusKepegawaian || '-',
       g.jenisPtk || '-',
-      g.agama || '-',
-      g.alamatJalan || '-'
+      g.jenjang || '-',
+      g.tugasTambahan || '-',
+      g.jabatanPtk || g.jabatan_ptk || '-',
+      g.hp || '-'
     ]);
 
     autoTable(doc, {
       startY: 47,
-      head: [['No', 'Nama Lengkap', 'NUPTK', 'JK', 'Tempat, Tgl Lahir', 'NIP', 'Status', 'Jenis PTK', 'Agama', 'Alamat']],
+      head: [['No', 'Nama Lengkap', 'NUPTK', 'JK', 'NIP', 'Status', 'Jenis PTK', 'Jenjang', 'Tugas Tambahan', 'Jabatan PTK', 'No HP']],
       body: tableBody,
       theme: 'grid',
       headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
       columnStyles: {
         0: { cellWidth: 8, halign: 'center' },
-        1: { cellWidth: 42 },
+        1: { cellWidth: 40 },
         2: { cellWidth: 26, halign: 'center' },
-        3: { cellWidth: 10, halign: 'center' },
-        4: { cellWidth: 38 },
-        5: { cellWidth: 32, halign: 'center' },
-        6: { cellWidth: 24 },
-        7: { cellWidth: 32 },
-        8: { cellWidth: 18 },
-        9: { cellWidth: 40 }
+        3: { cellWidth: 9, halign: 'center' },
+        4: { cellWidth: 32, halign: 'center' },
+        5: { cellWidth: 22 },
+        6: { cellWidth: 26 },
+        7: { cellWidth: 16, halign: 'center' },
+        8: { cellWidth: 32 },
+        9: { cellWidth: 32 },
+        10: { cellWidth: 22 }
       },
-      styles: { font: 'times', fontSize: 7.5, cellPadding: 2 }
+      styles: { font: 'times', fontSize: 7, cellPadding: 2 }
     });
 
-    const pdfBlob = doc.output('blob');
-    const blobUrl = URL.createObjectURL(pdfBlob);
-    window.open(blobUrl, '_blank');
+    const dateStr = new Date().toISOString().split('T')[0];
+    doc.save(`Biodata_GTK_SMKN1_Palopo_${dateStr}.pdf`);
   };
+
+  // JIKA LOGIN SEBAGAI USER: Tampilkan langsung data profil lengkap (seperti modal detail, tapi bukan modal dan bukan tabel)
+  if (isUser && userGtk) {
+    return (
+      <div className="w-full animate-in fade-in duration-150">
+        <GTKProfileCard gtk={userGtk} pembelajaranList={pembelajaranList} onNavigateTab={onNavigateTab} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 w-full">
@@ -323,6 +387,29 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
                   <SlidersHorizontal className="w-4 h-4 text-emerald-600" />
                   <span>Kolom</span>
                 </button>
+
+                {onNavigateTab && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateTab('gtk-pembelajaran')}
+                      className="flex items-center gap-1.5 px-3.5 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs rounded-xl border border-blue-200 shadow-2xs transition-colors shrink-0 cursor-pointer"
+                      title="Lihat Data Pembelajaran & Jam Mengajar PTK"
+                    >
+                      <BookOpen className="w-4 h-4 text-blue-600" />
+                      <span>Pembelajaran</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateTab('rekap-gtk')}
+                      className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs rounded-xl border border-indigo-200 shadow-2xs transition-colors shrink-0 cursor-pointer"
+                      title="Lihat Rekapitulasi GTK (Jenjang, Jenis PTK, Status Kepegawaian)"
+                    >
+                      <BarChart3 className="w-4 h-4 text-indigo-600" />
+                      <span>Rekap GTK</span>
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -369,6 +456,27 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
                   ))}
                 </select>
               </div>
+
+              {/* Jenjang Filter */}
+              {uniqueJenjang.length > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-600 font-medium">Jenjang:</span>
+                  <select
+                    value={selectedJenjang}
+                    onChange={(e) => {
+                      setSelectedJenjang(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                  >
+                    {uniqueJenjang.map((jj) => (
+                      <option key={jj} value={jj}>
+                        {jj}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Gender Filter */}
               <div className="flex items-center gap-1.5">
@@ -426,7 +534,7 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
                   }
                   className="rounded text-emerald-600 focus:ring-emerald-500"
                 />
-                <span className="capitalize">{colKey.replace(/([A-Z])/g, ' $1')}</span>
+                <span className="capitalize">{formatColumnLabel(colKey)}</span>
               </label>
             ))}
           </div>
@@ -446,6 +554,9 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
                 {visibleColumns.nip && <th className="py-2.5 px-3 min-w-[160px] border-r border-slate-300">NIP</th>}
                 {visibleColumns.statusKepegawaian && <th className="py-2.5 px-3 min-w-[140px] border-r border-slate-300">Status</th>}
                 {visibleColumns.jenisPtk && <th className="py-2.5 px-3 min-w-[150px] border-r border-slate-300">Jenis PTK</th>}
+                {visibleColumns.jenjang && <th className="py-2.5 px-3 min-w-[100px] border-r border-slate-300">Jenjang</th>}
+                {visibleColumns.tugasTambahan && <th className="py-2.5 px-3 min-w-[160px] border-r border-slate-300">Tugas Tambahan</th>}
+                {visibleColumns.jabatanPtk && <th className="py-2.5 px-3 min-w-[160px] border-r border-slate-300">Jabatan PTK</th>}
                 {visibleColumns.agama && <th className="py-2.5 px-3 min-w-[90px] border-r border-slate-300">Agama</th>}
                 {visibleColumns.alamatJalan && <th className="py-2.5 px-4 min-w-[200px] border-r border-slate-300">Alamat</th>}
                 {visibleColumns.hp && <th className="py-2.5 px-3 min-w-[120px] border-r border-slate-300">No HP</th>}
@@ -455,7 +566,7 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
             <tbody className="divide-y divide-slate-200 text-slate-800">
               {paginatedGTK.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-12 text-center text-slate-500 italic">
+                  <td colSpan={16} className="py-12 text-center text-slate-500 italic">
                     <GraduationCap className="w-10 h-10 mx-auto mb-2 text-slate-400" />
                     <p className="font-semibold text-slate-600">Tidak ada data GTK yang sesuai dengan filter.</p>
                     <p className="text-[11px] text-slate-400 mt-1">Coba sesuaikan kata kunci pencarian atau filter status.</p>
@@ -524,6 +635,24 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
                       {visibleColumns.jenisPtk && (
                         <td className="py-2.5 px-3 font-medium text-slate-800 border-r border-slate-200">
                           {gtk.jenisPtk || '-'}
+                        </td>
+                      )}
+
+                      {visibleColumns.jenjang && (
+                        <td className="py-2.5 px-3 font-medium text-slate-800 border-r border-slate-200">
+                          {gtk.jenjang || '-'}
+                        </td>
+                      )}
+
+                      {visibleColumns.tugasTambahan && (
+                        <td className="py-2.5 px-3 font-medium text-slate-800 border-r border-slate-200">
+                          {gtk.tugasTambahan || '-'}
+                        </td>
+                      )}
+
+                      {visibleColumns.jabatanPtk && (
+                        <td className="py-2.5 px-3 font-medium text-slate-800 border-r border-slate-200">
+                          {gtk.jabatanPtk || gtk.jabatan_ptk || '-'}
                         </td>
                       )}
 
@@ -618,6 +747,7 @@ export const GTKBiodataView: React.FC<GTKBiodataViewProps> = ({
         isOpen={Boolean(selectedGTKDetail)}
         onClose={() => setSelectedGTKDetail(null)}
         gtk={selectedGTKDetail}
+        pembelajaranList={pembelajaranList}
       />
     </div>
   );

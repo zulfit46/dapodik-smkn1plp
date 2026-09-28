@@ -61,6 +61,16 @@ export const DAFTAR_AKSES_MENU: MenuItemDefinition[] = [
     contohInput: 'gtk-kgb'
   },
   {
+    id: 'gtk-pembelajaran',
+    kode: 'gtk-pembelajaran',
+    nama: 'Pembelajaran',
+    kategori: 'GTK',
+    tab: 'gtk-pembelajaran',
+    aliases: ['gtk-pembelajaran', 'pembelajaran', 'jadwal-pembelajaran', 'mengajar', 'sk-mengajar', 'pembagian-tugas', 'tugas-mengajar'],
+    deskripsi: 'Data SK pembagian tugas mengajar, rombel, mapel, dan jam mengajar (JJM) GTK',
+    contohInput: 'gtk-pembelajaran'
+  },
+  {
     id: 'gtk-akses_menu',
     kode: 'gtk-akses_menu',
     nama: 'Akses Menu',
@@ -236,6 +246,8 @@ export function parseAksesMenuString(raw?: string | null): Set<ActiveTab> | null
       allowedTabs.add('gtk');
       allowedTabs.add('gtk-pangkat');
       allowedTabs.add('gtk-kgb');
+      allowedTabs.add('gtk-pembelajaran');
+      allowedTabs.add('pembelajaran');
       return;
     }
 
@@ -375,6 +387,7 @@ export function isCategoryPermitted(
       isTabPermitted('gtk-biodata', currentUser, waliKelasList) ||
       isTabPermitted('gtk-pangkat', currentUser, waliKelasList) ||
       isTabPermitted('gtk-kgb', currentUser, waliKelasList) ||
+      isTabPermitted('gtk-pembelajaran', currentUser, waliKelasList) ||
       isTabPermitted('akses-menu', currentUser, waliKelasList)
     );
   }
