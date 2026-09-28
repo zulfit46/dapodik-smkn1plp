@@ -103,7 +103,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ gtkList, onLogin }) => {
           <div className="p-6 sm:p-8 space-y-5">
             <div className="text-center">
               <h2 className="text-base font-bold text-slate-800">
-                LOGIN
+                PTK LOGIN
               </h2>
             </div>
 
