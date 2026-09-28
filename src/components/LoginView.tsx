@@ -95,15 +95,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ gtkList, onLogin }) => {
                 className="w-full h-full object-contain"
               />
             </div>
-            <h1 className="text-xl font-extrabold tracking-wide drop-shadow-xs">SMKN 1 PALOPO</h1>
-            <p className="text-xs text-indigo-100 font-medium mt-0.5">Sistem Informasi Manajemen Sekolah</p>
+            <h1 className="text-xl font-extrabold tracking-wide drop-shadow-xs">DAPODIK</h1>
+            <p className="text-xs text-indigo-100 font-medium mt-0.5">SMKN 1 PALOPO</p>
           </div>
 
           {/* Form Content */}
           <div className="p-6 sm:p-8 space-y-5">
             <div className="text-center">
               <h2 className="text-base font-bold text-slate-800">
-                Masuk Menggunakan NIP
+                LOGIN
               </h2>
             </div>
 
