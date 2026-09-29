@@ -21,7 +21,11 @@ import {
   MessageSquare, 
   ShieldCheck, 
   ExternalLink,
-  Info 
+  Info,
+  Layers,
+  FolderTree,
+  Tag,
+  SlidersHorizontal 
 } from 'lucide-react';
 
 interface TelegramConfigModalProps {
@@ -43,10 +47,19 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
     notifyMutasiKeluar: true,
     notifyPangkatBaru: true,
     notifyKGBBaru: true,
+    threadIdMutasiMasuk: '',
+    threadIdMutasiKeluar: '',
+    threadIdPangkat: '',
+    threadIdKGB: '',
+    chatIdMutasiMasuk: '',
+    chatIdMutasiKeluar: '',
+    chatIdPangkat: '',
+    chatIdKGB: '',
   });
 
   const [showToken, setShowToken] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [showGroupingSection, setShowGroupingSection] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -283,6 +296,188 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
             </div>
           </div>
 
+          {/* PENGELOMPOKAN NOTIFIKASI (Forum Topics / Thread ID / Chat ID Terpisah) */}
+          <div className="border border-sky-200/90 rounded-xl overflow-hidden bg-gradient-to-br from-sky-50/60 to-indigo-50/40">
+            <button
+              type="button"
+              onClick={() => setShowGroupingSection(!showGroupingSection)}
+              className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-sky-100/50 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-sky-600 text-white flex items-center justify-center shadow-2xs shrink-0">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-800">
+                      Pengelompokan Notifikasi (Topik Forum / Thread ID)
+                    </span>
+                    <span className="text-[10px] bg-sky-100 text-sky-800 font-semibold px-2 py-0.5 rounded-full border border-sky-200">
+                      Rekomendasi
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Pisahkan notifikasi ke sub-topik (Forum Supergroup) atau ke grup berbeda agar rapi
+                  </p>
+                </div>
+              </div>
+              {showGroupingSection ? (
+                <ChevronUp className="w-4 h-4 text-slate-500" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-500" />
+              )}
+            </button>
+
+            {showGroupingSection && (
+              <div className="px-4 pb-4 pt-2 space-y-4 border-t border-sky-200/80 bg-white animate-in fade-in duration-150">
+                <div className="bg-sky-50/80 border border-sky-200 rounded-lg p-3 text-[11px] text-slate-700 leading-relaxed flex items-start gap-2">
+                  <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Cara Kerja Pengelompokan:</strong> Jika grup Telegram Anda mengaktifkan mode <strong>Topics (Forum)</strong>, masukkan nomor <strong>Thread ID</strong> untuk tiap sub-topik di bawah. Pesan akan langsung masuk ke sub-topik tersebut! Jika dibiarkan kosong, notifikasi masuk ke ruang chat utama/General.
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {/* 1. Mutasi Masuk */}
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between font-semibold text-slate-800">
+                      <span className="flex items-center gap-1.5">
+                        <span>📥</span> Mutasi Masuk
+                      </span>
+                      <span className="text-[10px] text-slate-500">Siswa Baru</span>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-600 mb-1 font-medium">
+                        Thread / Topik ID:
+                      </label>
+                      <input
+                        type="text"
+                        value={config.threadIdMutasiMasuk || ''}
+                        onChange={(e) => setConfig({ ...config, threadIdMutasiMasuk: e.target.value.trim() })}
+                        placeholder="Contoh: 2 (angka thread)"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-600 mb-1 font-medium">
+                        Chat ID Khusus (Opsional):
+                      </label>
+                      <input
+                        type="text"
+                        value={config.chatIdMutasiMasuk || ''}
+                        onChange={(e) => setConfig({ ...config, chatIdMutasiMasuk: e.target.value.trim() })}
+                        placeholder="Kosongkan jika pakai Chat ID utama"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono text-[11px]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 2. Mutasi Keluar */}
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between font-semibold text-slate-800">
+                      <span className="flex items-center gap-1.5">
+                        <span>📤</span> Mutasi Keluar
+                      </span>
+                      <span className="text-[10px] text-slate-500">Siswa Pindah</span>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-600 mb-1 font-medium">
+                        Thread / Topik ID:
+                      </label>
+                      <input
+                        type="text"
+                        value={config.threadIdMutasiKeluar || ''}
+                        onChange={(e) => setConfig({ ...config, threadIdMutasiKeluar: e.target.value.trim() })}
+                        placeholder="Contoh: 5 (angka thread)"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-600 mb-1 font-medium">
+                        Chat ID Khusus (Opsional):
+                      </label>
+                      <input
+                        type="text"
+                        value={config.chatIdMutasiKeluar || ''}
+                        onChange={(e) => setConfig({ ...config, chatIdMutasiKeluar: e.target.value.trim() })}
+                        placeholder="Kosongkan jika pakai Chat ID utama"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono text-[11px]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 3. Kenaikan Pangkat */}
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between font-semibold text-slate-800">
+                      <span className="flex items-center gap-1.5">
+                        <span>🎖️</span> Kenaikan Pangkat
+                      </span>
+                      <span className="text-[10px] text-slate-500">SK GTK</span>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-600 mb-1 font-medium">
+                        Thread / Topik ID:
+                      </label>
+                      <input
+                        type="text"
+                        value={config.threadIdPangkat || ''}
+                        onChange={(e) => setConfig({ ...config, threadIdPangkat: e.target.value.trim() })}
+                        placeholder="Contoh: 10 (angka thread)"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-600 mb-1 font-medium">
+                        Chat ID Khusus (Opsional):
+                      </label>
+                      <input
+                        type="text"
+                        value={config.chatIdPangkat || ''}
+                        onChange={(e) => setConfig({ ...config, chatIdPangkat: e.target.value.trim() })}
+                        placeholder="Kosongkan jika pakai Chat ID utama"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono text-[11px]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 4. KGB */}
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between font-semibold text-slate-800">
+                      <span className="flex items-center gap-1.5">
+                        <span>💰</span> Gaji Berkala (KGB)
+                      </span>
+                      <span className="text-[10px] text-slate-500">SK Berkala GTK</span>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-600 mb-1 font-medium">
+                        Thread / Topik ID:
+                      </label>
+                      <input
+                        type="text"
+                        value={config.threadIdKGB || ''}
+                        onChange={(e) => setConfig({ ...config, threadIdKGB: e.target.value.trim() })}
+                        placeholder="Contoh: 14 (angka thread)"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-600 mb-1 font-medium">
+                        Chat ID Khusus (Opsional):
+                      </label>
+                      <input
+                        type="text"
+                        value={config.chatIdKGB || ''}
+                        onChange={(e) => setConfig({ ...config, chatIdKGB: e.target.value.trim() })}
+                        placeholder="Kosongkan jika pakai Chat ID utama"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono text-[11px]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Panduan Akordion */}
           <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/70">
             <button
@@ -292,7 +487,7 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
             >
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
                 <HelpCircle className="w-4 h-4 text-sky-600" />
-                <span>Panduan Cara Membuat Bot & Mengetahui Chat ID</span>
+                <span>Panduan Lengkap (Bot, Chat ID, & Cara Cari Thread ID)</span>
               </div>
               {showGuide ? <ChevronUp className="w-4 h-4 text-slate-600" /> : <ChevronDown className="w-4 h-4 text-slate-600" />}
             </button>
@@ -335,6 +530,27 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                         https://api.telegram.org/bot&lt;TOKEN_ANDA&gt;/getUpdates
                       </span>
                       Cari nilai <code className="text-sky-700 font-mono font-bold">"id"</code> di dalam bagian <code className="text-slate-700 font-mono">"chat"</code>.
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="space-y-1">
+                  <strong className="text-slate-800 flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold">4</span>
+                    Cara Mendapatkan Thread ID (Topik Forum):
+                  </strong>
+                  <ul className="pl-9 list-disc space-y-1">
+                    <li>
+                      Di grup Telegram Anda, buka pengaturan grup &rarr; aktifkan pilihan <b>Topics</b> (Forum mode).
+                    </li>
+                    <li>
+                      Buat topik baru (misal: "Mutasi Masuk", "Mutasi Keluar", "Kenaikan Pangkat", "KGB").
+                    </li>
+                    <li>
+                      Buka sub-topik tersebut &rarr; klik ikon titik tiga di pojok kanan atas &rarr; pilih <b>Copy Link</b>.
+                    </li>
+                    <li>
+                      Link akan berbentuk <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700 font-mono text-[10px]">https://t.me/c/1234567890/42</code>. Angka paling ujung (<code className="font-bold text-indigo-800">42</code>) adalah <b>Thread ID</b> topik tersebut!
                     </li>
                   </ul>
                 </div>
