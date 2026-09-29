@@ -459,9 +459,9 @@ export const GTKPangkatView: React.FC<GTKPangkatViewProps> = ({
         return updated;
       });
 
-      // 2. Call server delete endpoint
+      // 2. Call server delete endpoint (with forward=false because client forwards directly below)
       try {
-        await fetch(`/api/pangkat/${encodeURIComponent(itemToDelete.id)}`, { method: 'DELETE' });
+        await fetch(`/api/pangkat/${encodeURIComponent(itemToDelete.id)}?forward=false`, { method: 'DELETE' });
       } catch (err) {
         console.warn('Server delete error:', err);
       }

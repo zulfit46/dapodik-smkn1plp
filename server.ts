@@ -1697,22 +1697,23 @@ async function startServer() {
 
     const [deletedItem] = cachedPangkatList.splice(index, 1);
 
-    // Forward deletion to Google Sheets Web App if configured
-    if (appConfig.webAppUrl && deletedItem) {
-      try {
-        await fetch(appConfig.webAppUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'delete',
-            target: 'naikpangkat',
-            item: deletedItem
-          }),
-          signal: AbortSignal.timeout(15000)
-        });
-      } catch (err) {
-        console.warn("Delete pangkat Google Sheets forwarding warning:", err);
-      }
+    // Forward deletion to Google Sheets Web App asynchronously if configured and not already forwarded by client
+    const shouldForwardPangkatDelete = req.query.forward !== 'false';
+    if (appConfig.webAppUrl && deletedItem && shouldForwardPangkatDelete) {
+      fetch(appConfig.webAppUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'delete',
+          target: 'naikpangkat',
+          item: deletedItem
+        }),
+        signal: AbortSignal.timeout(20000)
+      }).catch(err => {
+        if (err?.name !== 'TimeoutError' && err?.name !== 'AbortError') {
+          console.warn("Delete pangkat Google Sheets forwarding notice:", err?.message || err);
+        }
+      });
     }
 
     res.json({ status: "success", message: "Data riwayat pangkat berhasil dihapus", data: deletedItem });
@@ -1873,22 +1874,23 @@ async function startServer() {
 
     const [deletedItem] = cachedKGBList.splice(index, 1);
 
-    // Forward deletion to Google Sheets Web App if configured
-    if (appConfig.webAppUrl && deletedItem) {
-      try {
-        await fetch(appConfig.webAppUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'delete',
-            target: 'kgb',
-            item: deletedItem
-          }),
-          signal: AbortSignal.timeout(15000)
-        });
-      } catch (err) {
-        console.warn("Delete kgb Google Sheets forwarding warning:", err);
-      }
+    // Forward deletion to Google Sheets Web App asynchronously if configured and not already forwarded by client
+    const shouldForwardKGBDelete = req.query.forward !== 'false';
+    if (appConfig.webAppUrl && deletedItem && shouldForwardKGBDelete) {
+      fetch(appConfig.webAppUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'delete',
+          target: 'kgb',
+          item: deletedItem
+        }),
+        signal: AbortSignal.timeout(20000)
+      }).catch(err => {
+        if (err?.name !== 'TimeoutError' && err?.name !== 'AbortError') {
+          console.warn("Delete kgb Google Sheets forwarding notice:", err?.message || err);
+        }
+      });
     }
 
     res.json({ status: "success", message: "Data riwayat KGB berhasil dihapus", data: deletedItem });
