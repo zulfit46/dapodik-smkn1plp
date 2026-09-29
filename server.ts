@@ -69,23 +69,30 @@ try {
   console.warn('Failed to load telegram_config.json:', e);
 }
 
-async function sendTelegramMessageServer(botToken?: string, chatId?: string, message?: string): Promise<{ ok: boolean; description?: string }> {
+async function sendTelegramMessageServer(botToken?: string, chatId?: string, message?: string, threadId?: string | number): Promise<{ ok: boolean; description?: string }> {
   const token = (botToken || telegramConfig.botToken || '').trim();
   const chat = (chatId || telegramConfig.chatId || '').trim();
   if (!token || !chat) {
     throw new Error('Telegram Bot Token atau Chat ID belum ditentukan');
   }
 
+  const payload: Record<string, any> = {
+    chat_id: chat,
+    text: message || '',
+    parse_mode: 'HTML',
+    disable_web_page_preview: false,
+  };
+
+  if (threadId && String(threadId).trim()) {
+    const num = Number(threadId);
+    payload.message_thread_id = !isNaN(num) ? num : String(threadId).trim();
+  }
+
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chat,
-      text: message || '',
-      parse_mode: 'HTML',
-      disable_web_page_preview: false,
-    }),
+    body: JSON.stringify(payload),
     signal: AbortSignal.timeout(15000),
   });
 
@@ -2334,12 +2341,37 @@ async function startServer() {
       notifyMutasiKeluar: telegramConfig.notifyMutasiKeluar !== false,
       notifyPangkatBaru: telegramConfig.notifyPangkatBaru !== false,
       notifyKGBBaru: telegramConfig.notifyKGBBaru !== false,
+      threadIdMutasiMasuk: (telegramConfig as any).threadIdMutasiMasuk || "",
+      threadIdMutasiKeluar: (telegramConfig as any).threadIdMutasiKeluar || "",
+      threadIdPangkat: (telegramConfig as any).threadIdPangkat || "",
+      threadIdKGB: (telegramConfig as any).threadIdKGB || "",
+      chatIdMutasiMasuk: (telegramConfig as any).chatIdMutasiMasuk || "",
+      chatIdMutasiKeluar: (telegramConfig as any).chatIdMutasiKeluar || "",
+      chatIdPangkat: (telegramConfig as any).chatIdPangkat || "",
+      chatIdKGB: (telegramConfig as any).chatIdKGB || "",
     });
   });
 
   app.post("/api/telegram/config", (req, res) => {
     try {
-      const { botToken, chatId, enabled, notifyMutasiMasuk, notifyMutasiKeluar, notifyPangkatBaru, notifyKGBBaru } = req.body;
+      const {
+        botToken,
+        chatId,
+        enabled,
+        notifyMutasiMasuk,
+        notifyMutasiKeluar,
+        notifyPangkatBaru,
+        notifyKGBBaru,
+        threadIdMutasiMasuk,
+        threadIdMutasiKeluar,
+        threadIdPangkat,
+        threadIdKGB,
+        chatIdMutasiMasuk,
+        chatIdMutasiKeluar,
+        chatIdPangkat,
+        chatIdKGB,
+      } = req.body;
+
       telegramConfig = {
         botToken: typeof botToken === "string" ? botToken.trim() : telegramConfig.botToken,
         chatId: typeof chatId === "string" ? chatId.trim() : telegramConfig.chatId,
@@ -2348,7 +2380,15 @@ async function startServer() {
         notifyMutasiKeluar: typeof notifyMutasiKeluar === "boolean" ? notifyMutasiKeluar : telegramConfig.notifyMutasiKeluar,
         notifyPangkatBaru: typeof notifyPangkatBaru === "boolean" ? notifyPangkatBaru : telegramConfig.notifyPangkatBaru,
         notifyKGBBaru: typeof notifyKGBBaru === "boolean" ? notifyKGBBaru : telegramConfig.notifyKGBBaru,
-      };
+        threadIdMutasiMasuk: typeof threadIdMutasiMasuk === "string" ? threadIdMutasiMasuk.trim() : ((telegramConfig as any).threadIdMutasiMasuk || ""),
+        threadIdMutasiKeluar: typeof threadIdMutasiKeluar === "string" ? threadIdMutasiKeluar.trim() : ((telegramConfig as any).threadIdMutasiKeluar || ""),
+        threadIdPangkat: typeof threadIdPangkat === "string" ? threadIdPangkat.trim() : ((telegramConfig as any).threadIdPangkat || ""),
+        threadIdKGB: typeof threadIdKGB === "string" ? threadIdKGB.trim() : ((telegramConfig as any).threadIdKGB || ""),
+        chatIdMutasiMasuk: typeof chatIdMutasiMasuk === "string" ? chatIdMutasiMasuk.trim() : ((telegramConfig as any).chatIdMutasiMasuk || ""),
+        chatIdMutasiKeluar: typeof chatIdMutasiKeluar === "string" ? chatIdMutasiKeluar.trim() : ((telegramConfig as any).chatIdMutasiKeluar || ""),
+        chatIdPangkat: typeof chatIdPangkat === "string" ? chatIdPangkat.trim() : ((telegramConfig as any).chatIdPangkat || ""),
+        chatIdKGB: typeof chatIdKGB === "string" ? chatIdKGB.trim() : ((telegramConfig as any).chatIdKGB || ""),
+      } as any;
 
       try {
         fs.writeFileSync(TELEGRAM_CONFIG_FILE, JSON.stringify(telegramConfig, null, 2), "utf-8");
@@ -2359,15 +2399,7 @@ async function startServer() {
       return res.json({
         status: "success",
         message: "Pengaturan Telegram berhasil disimpan di server",
-        config: {
-          botToken: telegramConfig.botToken,
-          chatId: telegramConfig.chatId,
-          enabled: telegramConfig.enabled,
-          notifyMutasiMasuk: telegramConfig.notifyMutasiMasuk,
-          notifyMutasiKeluar: telegramConfig.notifyMutasiKeluar,
-          notifyPangkatBaru: telegramConfig.notifyPangkatBaru,
-          notifyKGBBaru: telegramConfig.notifyKGBBaru,
-        }
+        config: telegramConfig
       });
     } catch (err: any) {
       console.error("[Telegram Config Save] Error:", err);
@@ -2380,18 +2412,19 @@ async function startServer() {
 
   app.post("/api/telegram/send", async (req, res) => {
     try {
-      const { botToken, chatId, message } = req.body;
+      const { botToken, chatId, message, threadId, message_thread_id } = req.body;
       if (!message) {
         return res.status(400).json({ status: "error", message: "Pesan tidak boleh kosong" });
       }
 
       const activeToken = botToken || telegramConfig.botToken;
       const activeChatId = chatId || telegramConfig.chatId;
+      const activeThreadId = threadId || message_thread_id;
       if (!activeToken || !activeChatId) {
         return res.status(400).json({ status: "error", message: "Bot Token atau Chat ID belum ditentukan" });
       }
 
-      const result = await sendTelegramMessageServer(activeToken, activeChatId, message);
+      const result = await sendTelegramMessageServer(activeToken, activeChatId, message, activeThreadId);
       return res.json({
         status: "success",
         message: "Pesan berhasil dikirim ke Telegram",
