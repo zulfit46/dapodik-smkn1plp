@@ -24,6 +24,14 @@ export const DEFAULT_TELEGRAM_CONFIG: TelegramConfig = {
   notifyMutasiKeluar: true,
   notifyPangkatBaru: true,
   notifyKGBBaru: true,
+  threadIdMutasiMasuk: '',
+  threadIdMutasiKeluar: '',
+  threadIdPangkat: '',
+  threadIdKGB: '',
+  chatIdMutasiMasuk: '',
+  chatIdMutasiKeluar: '',
+  chatIdPangkat: '',
+  chatIdKGB: '',
 };
 
 /**
@@ -62,6 +70,14 @@ export async function getTelegramConfig(): Promise<TelegramConfig> {
         notifyMutasiKeluar: localConfig.notifyMutasiKeluar ?? serverConfig.notifyMutasiKeluar ?? true,
         notifyPangkatBaru: localConfig.notifyPangkatBaru ?? serverConfig.notifyPangkatBaru ?? true,
         notifyKGBBaru: localConfig.notifyKGBBaru ?? serverConfig.notifyKGBBaru ?? true,
+        threadIdMutasiMasuk: localConfig.threadIdMutasiMasuk ?? serverConfig.threadIdMutasiMasuk ?? '',
+        threadIdMutasiKeluar: localConfig.threadIdMutasiKeluar ?? serverConfig.threadIdMutasiKeluar ?? '',
+        threadIdPangkat: localConfig.threadIdPangkat ?? serverConfig.threadIdPangkat ?? '',
+        threadIdKGB: localConfig.threadIdKGB ?? serverConfig.threadIdKGB ?? '',
+        chatIdMutasiMasuk: localConfig.chatIdMutasiMasuk ?? serverConfig.chatIdMutasiMasuk ?? '',
+        chatIdMutasiKeluar: localConfig.chatIdMutasiKeluar ?? serverConfig.chatIdMutasiKeluar ?? '',
+        chatIdPangkat: localConfig.chatIdPangkat ?? serverConfig.chatIdPangkat ?? '',
+        chatIdKGB: localConfig.chatIdKGB ?? serverConfig.chatIdKGB ?? '',
       };
       safeSetItem(STORAGE_KEY, merged);
       return merged;
@@ -113,7 +129,12 @@ export async function saveTelegramConfig(config: TelegramConfig): Promise<{ succ
  * Catatan penting: Telegram API mengembalikan HTTP 501 jika browser mengirim OPTIONS preflight dengan Content-Type: application/json.
  * Dengan application/x-www-form-urlencoded, browser mengirim Simple CORS Request tanpa OPTIONS preflight!
  */
-async function sendDirectToTelegram(botToken: string, chatId: string, htmlMessage: string): Promise<{ ok: boolean; description?: string }> {
+async function sendDirectToTelegram(
+  botToken: string,
+  chatId: string,
+  htmlMessage: string,
+  threadId?: string
+): Promise<{ ok: boolean; description?: string }> {
   const cleanToken = botToken.trim();
   const cleanChatId = chatId.trim();
   if (!cleanToken || !cleanChatId) {
@@ -126,6 +147,10 @@ async function sendDirectToTelegram(botToken: string, chatId: string, htmlMessag
   params.append('text', htmlMessage);
   params.append('parse_mode', 'HTML');
   params.append('disable_web_page_preview', 'false');
+
+  if (threadId && String(threadId).trim()) {
+    params.append('message_thread_id', String(threadId).trim());
+  }
 
   const res = await fetch(url, {
     method: 'POST',
@@ -145,7 +170,13 @@ async function sendDirectToTelegram(botToken: string, chatId: string, htmlMessag
 /**
  * Optional fallback: Kirim lewat Google Apps Script Web App jika server proxy & direct API terblokir ISP
  */
-async function sendViaGoogleAppsScript(webAppUrl: string, botToken: string, chatId: string, htmlMessage: string): Promise<{ success: boolean; message: string }> {
+async function sendViaGoogleAppsScript(
+  webAppUrl: string,
+  botToken: string,
+  chatId: string,
+  htmlMessage: string,
+  threadId?: string
+): Promise<{ success: boolean; message: string }> {
   try {
     const res = await fetch(webAppUrl, {
       method: 'POST',
@@ -155,6 +186,8 @@ async function sendViaGoogleAppsScript(webAppUrl: string, botToken: string, chat
         botToken: botToken.trim(),
         chatId: chatId.trim(),
         message: htmlMessage,
+        threadId: threadId || undefined,
+        message_thread_id: threadId || undefined,
       }),
       signal: AbortSignal.timeout(15000),
     });
@@ -179,11 +212,13 @@ async function sendViaGoogleAppsScript(webAppUrl: string, botToken: string, chat
 export async function sendTelegramMessage(
   message: string,
   customConfig?: Partial<TelegramConfig>,
-  webAppUrl?: string
+  webAppUrl?: string,
+  options?: { threadId?: string; targetChatId?: string }
 ): Promise<{ success: boolean; message: string }> {
   const currentConfig = customConfig?.botToken ? { ...DEFAULT_TELEGRAM_CONFIG, ...customConfig } : await getTelegramConfig();
   const botToken = (customConfig?.botToken || currentConfig.botToken || ENV_BOT_TOKEN || '').trim();
-  const chatId = (customConfig?.chatId || currentConfig.chatId || ENV_CHAT_ID || '').trim();
+  const chatId = (options?.targetChatId || customConfig?.chatId || currentConfig.chatId || ENV_CHAT_ID || '').trim();
+  const threadId = options?.threadId ? String(options.threadId).trim() : undefined;
 
   if (!botToken || !chatId) {
     return {
@@ -201,6 +236,8 @@ export async function sendTelegramMessage(
         botToken,
         chatId,
         message,
+        threadId,
+        message_thread_id: threadId,
       }),
       signal: AbortSignal.timeout(10000),
     });
@@ -219,7 +256,7 @@ export async function sendTelegramMessage(
 
   // 2. Direct Telegram API fallback (CORS simple request)
   try {
-    await sendDirectToTelegram(botToken, chatId, message);
+    await sendDirectToTelegram(botToken, chatId, message, threadId);
     return { success: true, message: 'Pesan berhasil terkirim langsung ke Telegram' };
   } catch (directErr: any) {
     console.warn('[Telegram] Direct send failed:', directErr);
@@ -227,7 +264,7 @@ export async function sendTelegramMessage(
     // 3. Fallback ke Google Apps Script Web App jika direct API diblokir ISP lokal
     if (webAppUrl) {
       try {
-        return await sendViaGoogleAppsScript(webAppUrl, botToken, chatId, message);
+        return await sendViaGoogleAppsScript(webAppUrl, botToken, chatId, message, threadId);
       } catch (gasErr: any) {
         console.warn('[Telegram] Fallback to Google Apps Script also failed:', gasErr);
       }
@@ -245,7 +282,8 @@ export async function sendTelegramMessage(
  */
 export async function testTelegramConnection(
   botToken: string,
-  chatId: string
+  chatId: string,
+  threadId?: string
 ): Promise<{ success: boolean; message: string }> {
   const now = new Date();
   const waktuStr = now.toLocaleDateString('id-ID', {
@@ -255,15 +293,24 @@ export async function testTelegramConnection(
     year: 'numeric',
   }) + ` pukul ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WITA/WIB`;
 
+  const threadInfo = threadId ? `\n📌 <b>Topik/Thread ID:</b> <code>${escapeTelegramHtml(threadId)}</code>` : '';
+
   const testMessage = `🤖 <b>UJI COBA NOTIFIKASI TELEGRAM</b>
 ━━━━━━━━━━━━━━━━━━━━
 ✅ <b>Status:</b> Koneksi Berhasil Terhubung!
 🏫 <b>Aplikasi:</b> Sistem Informasi Dapodik
-⏰ <b>Waktu:</b> ${escapeTelegramHtml(waktuStr)}
+⏰ <b>Waktu:</b> ${escapeTelegramHtml(waktuStr)}${threadInfo}
 ━━━━━━━━━━━━━━━━━━━━
-<i>Bot Telegram Anda sekarang siap menerima notifikasi mutasi masuk dan keluar secara otomatis.</i>`;
+<i>Bot Telegram Anda siap menerima notifikasi mutasi, kenaikan pangkat, dan KGB secara terkelompok.</i>
 
-  return sendTelegramMessage(testMessage, { botToken, chatId, enabled: true });
+#UJI_COBA #SISTEM_DAPODIK`;
+
+  return sendTelegramMessage(
+    testMessage,
+    { botToken, chatId, enabled: true },
+    undefined,
+    { threadId, targetChatId: chatId }
+  );
 }
 
 /**
@@ -287,9 +334,9 @@ export async function notifyMutasiMasuk(
   const now = new Date();
   const waktuStr = `${now.toLocaleDateString('id-ID')} ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
 
-  const message = `📥 <b>NOTIFIKASI MUTASI MASUK BARU</b>
+  const message = `📥 <b>[MUTASI MASUK] NOTIFIKASI MUTASI MASUK SISWA</b>
 ━━━━━━━━━━━━━━━━━━━━
-👤 <b>Nama Siswa:</b> ${escapeTelegramHtml(item.nama || '-')}
+👤 <b>Nama Siswa:</b> <b>${escapeTelegramHtml(item.nama || '-')}</b>
 🆔 <b>NISN:</b> <code>${escapeTelegramHtml(item.nisn || '-')}</code>
 🏫 <b>Sekolah Asal:</b> ${escapeTelegramHtml(item.sekolahAsal || '-')}
 📍 <b>Wilayah Asal:</b> ${escapeTelegramHtml(wilayah)}
@@ -299,9 +346,14 @@ export async function notifyMutasiMasuk(
 📝 <b>Keterangan:</b> ${escapeTelegramHtml(item.keterangan || '-')}
 ━━━━━━━━━━━━━━━━━━━━
 ⏰ <i>Waktu Input: ${escapeTelegramHtml(waktuStr)}</i>
-🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>`;
+🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>
 
-  return sendTelegramMessage(message, conf, webAppUrl);
+#MUTASI_MASUK #SISWA_BARU`;
+
+  const targetChatId = conf.chatIdMutasiMasuk || conf.chatId;
+  const threadId = conf.threadIdMutasiMasuk;
+
+  return sendTelegramMessage(message, conf, webAppUrl, { threadId, targetChatId });
 }
 
 /**
@@ -320,9 +372,9 @@ export async function notifyPangkatBaru(
   const now = new Date();
   const waktuStr = `${now.toLocaleDateString('id-ID')} ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
 
-  const message = `🎖️ <b>NOTIFIKASI RIWAYAT KENAIKAN PANGKAT BARU</b>
+  const message = `🎖️ <b>[KENAIKAN PANGKAT] NOTIFIKASI RIWAYAT PANGKAT BARU</b>
 ━━━━━━━━━━━━━━━━━━━━
-👤 <b>Nama GTK:</b> ${escapeTelegramHtml(item.nama || '-')}
+👤 <b>Nama GTK:</b> <b>${escapeTelegramHtml(item.nama || '-')}</b>
 🆔 <b>NIP:</b> <code>${escapeTelegramHtml(item.nip || '-')}</code>
 📊 <b>Golongan/Pangkat:</b> <b>${escapeTelegramHtml(item.gol || '-')}</b>
 📄 <b>No. SK Pangkat:</b> ${escapeTelegramHtml(item.noSk || '-')}
@@ -332,9 +384,14 @@ export async function notifyPangkatBaru(
 📌 <b>Status:</b> <b>${escapeTelegramHtml(item.status || 'Proses')}</b>
 ━━━━━━━━━━━━━━━━━━━━
 ⏰ <i>Waktu Input: ${escapeTelegramHtml(waktuStr)}</i>
-🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>`;
+🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>
 
-  return sendTelegramMessage(message, conf, webAppUrl);
+#KENAIKAN_PANGKAT #GTK #KEPEGAWAIAN`;
+
+  const targetChatId = conf.chatIdPangkat || conf.chatId;
+  const threadId = conf.threadIdPangkat;
+
+  return sendTelegramMessage(message, conf, webAppUrl, { threadId, targetChatId });
 }
 
 /**
@@ -357,9 +414,9 @@ export async function notifyKGBBaru(
     ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(item.gajiPokok)
     : '-';
 
-  const message = `💰 <b>NOTIFIKASI RIWAYAT KGB BARU</b>
+  const message = `💰 <b>[GAJI BERKALA] NOTIFIKASI RIWAYAT KGB BARU</b>
 ━━━━━━━━━━━━━━━━━━━━
-👤 <b>Nama GTK:</b> ${escapeTelegramHtml(item.nama || '-')}
+👤 <b>Nama GTK:</b> <b>${escapeTelegramHtml(item.nama || '-')}</b>
 🆔 <b>NIP:</b> <code>${escapeTelegramHtml(item.nip || '-')}</code>
 📊 <b>Golongan:</b> <b>${escapeTelegramHtml(item.gol || '-')}</b>
 📄 <b>No. SK KGB:</b> ${escapeTelegramHtml(item.noSk || '-')}
@@ -370,9 +427,14 @@ export async function notifyKGBBaru(
 📌 <b>Status:</b> <b>${escapeTelegramHtml(item.status || 'Proses')}</b>
 ━━━━━━━━━━━━━━━━━━━━
 ⏰ <i>Waktu Input: ${escapeTelegramHtml(waktuStr)}</i>
-🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>`;
+🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>
 
-  return sendTelegramMessage(message, conf, webAppUrl);
+#KGB #GAJI_BERKALA #GTK`;
+
+  const targetChatId = conf.chatIdKGB || conf.chatId;
+  const threadId = conf.threadIdKGB;
+
+  return sendTelegramMessage(message, conf, webAppUrl, { threadId, targetChatId });
 }
 
 /**
@@ -399,9 +461,9 @@ export async function notifyMutasiKeluar(
     berkasSection = `\n📁 <b>Berkas:</b> ${escapeTelegramHtml(item.uploadBerkas)}`;
   }
 
-  const message = `📤 <b>NOTIFIKASI MUTASI KELUAR BARU</b>
+  const message = `📤 <b>[MUTASI KELUAR] NOTIFIKASI MUTASI KELUAR SISWA</b>
 ━━━━━━━━━━━━━━━━━━━━
-👤 <b>Nama Siswa:</b> ${escapeTelegramHtml(item.nama || '-')}
+👤 <b>Nama Siswa:</b> <b>${escapeTelegramHtml(item.nama || '-')}</b>
 🆔 <b>NISN:</b> <code>${escapeTelegramHtml(item.nisn || '-')}</code> | <b>NIPD:</b> <code>${escapeTelegramHtml(item.nipd || '-')}</code>
 🏛️ <b>Rombel Asal:</b> <b>${escapeTelegramHtml(item.rombel || '-')}</b>
 📌 <b>Jenis Mutasi:</b> <b>${escapeTelegramHtml(item.ketMutasi || 'Mutasi')}</b>
@@ -411,7 +473,12 @@ export async function notifyMutasiKeluar(
 📋 <b>Status:</b> ${escapeTelegramHtml(item.status || 'Selesai')}${berkasSection}
 ━━━━━━━━━━━━━━━━━━━━
 ⏰ <i>Waktu Input: ${escapeTelegramHtml(waktuStr)}</i>
-🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>`;
+🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>
 
-  return sendTelegramMessage(message, conf, webAppUrl);
+#MUTASI_KELUAR #SISWA`;
+
+  const targetChatId = conf.chatIdMutasiKeluar || conf.chatId;
+  const threadId = conf.threadIdMutasiKeluar;
+
+  return sendTelegramMessage(message, conf, webAppUrl, { threadId, targetChatId });
 }
