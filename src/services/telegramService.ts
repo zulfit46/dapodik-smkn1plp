@@ -134,7 +134,7 @@ async function sendDirectToTelegram(
   chatId: string,
   htmlMessage: string,
   threadId?: string
-): Promise<{ ok: boolean; description?: string }> {
+): Promise<{ ok: boolean; description?: string; fallbackToMainChat?: boolean }> {
   const cleanToken = botToken.trim();
   const cleanChatId = chatId.trim();
   if (!cleanToken || !cleanChatId) {
@@ -152,19 +152,35 @@ async function sendDirectToTelegram(
     params.append('message_thread_id', String(threadId).trim());
   }
 
-  const res = await fetch(url, {
+  let res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params.toString(),
     signal: AbortSignal.timeout(12000),
   });
 
-  const data = await res.json();
+  let data = await res.json();
+  let fallbackToMainChat = false;
+
+  // Jika thread/topik tidak ditemukan, coba kirim ke ruang obrolan utama grup
+  if ((!res.ok || !data.ok) && params.has('message_thread_id') && String(data.description || '').toLowerCase().includes('thread not found')) {
+    console.warn(`[Telegram Direct] Thread ID ${threadId} tidak ditemukan di chat ${cleanChatId}. Mengalihkan ke ruang utama...`);
+    params.delete('message_thread_id');
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+      signal: AbortSignal.timeout(12000),
+    });
+    data = await res.json();
+    fallbackToMainChat = true;
+  }
+
   if (!res.ok || !data.ok) {
     throw new Error(data.description || `HTTP ${res.status}: Gagal mengirim pesan ke Telegram API`);
   }
 
-  return data;
+  return { ...data, fallbackToMainChat };
 }
 
 /**
@@ -246,7 +262,12 @@ export async function sendTelegramMessage(
     if (res.ok && contentType.includes('application/json')) {
       const data = await res.json();
       if (data.status === 'success') {
-        return { success: true, message: 'Pesan berhasil terkirim ke Telegram' };
+        return {
+          success: true,
+          message: data.fallbackToMainChat
+            ? 'Pesan terkirim ke ruang utama grup (Topik/Thread ID tidak ditemukan)'
+            : 'Pesan berhasil terkirim ke Telegram'
+        };
       }
       throw new Error(data.message || 'Gagal mengirim melalui server proxy');
     }
@@ -256,8 +277,13 @@ export async function sendTelegramMessage(
 
   // 2. Direct Telegram API fallback (CORS simple request)
   try {
-    await sendDirectToTelegram(botToken, chatId, message, threadId);
-    return { success: true, message: 'Pesan berhasil terkirim langsung ke Telegram' };
+    const directRes = await sendDirectToTelegram(botToken, chatId, message, threadId);
+    return {
+      success: true,
+      message: directRes.fallbackToMainChat
+        ? 'Pesan terkirim langsung ke ruang utama grup (Topik/Thread ID tidak ditemukan di grup)'
+        : 'Pesan berhasil terkirim langsung ke Telegram'
+    };
   } catch (directErr: any) {
     console.warn('[Telegram] Direct send failed:', directErr);
 
