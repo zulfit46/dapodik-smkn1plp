@@ -25,6 +25,14 @@ export default async function handler(req: any, res: any) {
       notifyMutasiKeluar: true,
       notifyPangkatBaru: true,
       notifyKGBBaru: true,
+      threadIdMutasiMasuk: '',
+      threadIdMutasiKeluar: '',
+      threadIdPangkat: '',
+      threadIdKGB: '',
+      chatIdMutasiMasuk: '',
+      chatIdMutasiKeluar: '',
+      chatIdPangkat: '',
+      chatIdKGB: '',
     });
   }
 
@@ -50,6 +58,14 @@ export default async function handler(req: any, res: any) {
         notifyMutasiKeluar: body.notifyMutasiKeluar ?? true,
         notifyPangkatBaru: body.notifyPangkatBaru ?? true,
         notifyKGBBaru: body.notifyKGBBaru ?? true,
+        threadIdMutasiMasuk: body.threadIdMutasiMasuk || '',
+        threadIdMutasiKeluar: body.threadIdMutasiKeluar || '',
+        threadIdPangkat: body.threadIdPangkat || '',
+        threadIdKGB: body.threadIdKGB || '',
+        chatIdMutasiMasuk: body.chatIdMutasiMasuk || '',
+        chatIdMutasiKeluar: body.chatIdMutasiKeluar || '',
+        chatIdPangkat: body.chatIdPangkat || '',
+        chatIdKGB: body.chatIdKGB || '',
       },
     });
   }
