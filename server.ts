@@ -69,7 +69,7 @@ try {
   console.warn('Failed to load telegram_config.json:', e);
 }
 
-async function sendTelegramMessageServer(botToken?: string, chatId?: string, message?: string, threadId?: string | number): Promise<{ ok: boolean; description?: string }> {
+async function sendTelegramMessageServer(botToken?: string, chatId?: string, message?: string, threadId?: string | number): Promise<{ ok: boolean; description?: string; fallbackToMainChat?: boolean; warning?: string }> {
   const token = (botToken || telegramConfig.botToken || '').trim();
   const chat = (chatId || telegramConfig.chatId || '').trim();
   if (!token || !chat) {
@@ -89,14 +89,35 @@ async function sendTelegramMessageServer(botToken?: string, chatId?: string, mes
   }
 
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
-  const res = await fetch(url, {
+  let res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(15000),
   });
 
-  const data: any = await res.json();
+  let data: any = await res.json();
+
+  // Jika threadId tidak ditemukan (error: "message thread not found"), otomatis fallback kirim ke chat utama
+  if ((!res.ok || !data.ok) && payload.message_thread_id && String(data.description || '').toLowerCase().includes('thread not found')) {
+    console.warn(`[Telegram Send] Thread ID ${payload.message_thread_id} tidak ditemukan di grup ${chat}. Mengalihkan pesan ke chat utama...`);
+    delete payload.message_thread_id;
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15000),
+    });
+    data = await res.json();
+    if (res.ok && data.ok) {
+      return {
+        ...data,
+        fallbackToMainChat: true,
+        warning: `Topik/Thread ID tidak ditemukan di Telegram. Pesan dialihkan ke ruang chat utama grup.`,
+      };
+    }
+  }
+
   if (!res.ok || !data.ok) {
     throw new Error(data.description || `HTTP ${res.status}: Gagal mengirim pesan ke Telegram API`);
   }
@@ -2427,7 +2448,10 @@ async function startServer() {
       const result = await sendTelegramMessageServer(activeToken, activeChatId, message, activeThreadId);
       return res.json({
         status: "success",
-        message: "Pesan berhasil dikirim ke Telegram",
+        message: result.fallbackToMainChat
+          ? (result.warning || "Pesan terkirim ke ruang utama grup (Topik/Thread ID tidak ditemukan)")
+          : "Pesan berhasil dikirim ke Telegram",
+        fallbackToMainChat: Boolean(result.fallbackToMainChat),
         result
       });
     } catch (err: any) {
