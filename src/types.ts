@@ -162,6 +162,18 @@ export interface TelegramConfig {
   notifyMutasiKeluar: boolean;
   notifyPangkatBaru: boolean;
   notifyKGBBaru: boolean;
+
+  // Pengelompokan Notifikasi (Topik Forum / Thread ID di Telegram Supergroup)
+  threadIdMutasiMasuk?: string;
+  threadIdMutasiKeluar?: string;
+  threadIdPangkat?: string;
+  threadIdKGB?: string;
+
+  // Opsi Chat ID / Grup Khusus Terpisah per Kategori (opsional, jika tidak memakai 1 grup dengan topik)
+  chatIdMutasiMasuk?: string;
+  chatIdMutasiKeluar?: string;
+  chatIdPangkat?: string;
+  chatIdKGB?: string;
 }
 
 export interface GTKData {
