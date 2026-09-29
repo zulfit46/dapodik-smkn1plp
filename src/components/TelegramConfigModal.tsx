@@ -34,6 +34,28 @@ interface TelegramConfigModalProps {
   onConfigSaved?: (config: TelegramConfig) => void;
 }
 
+// Helper untuk otomatis mengekstrak Chat ID atau Thread ID jika user menempel link t.me
+// Contoh link Telegram: https://t.me/c/4324462750/6/9
+export function parseTelegramChatId(input: string): string {
+  const trimmed = input.trim();
+  // Format https://t.me/c/4324462750/... -> Bot API chat_id = -1004324462750
+  const match = trimmed.match(/t\.me\/c\/(\d+)/i);
+  if (match && match[1]) {
+    return `-100${match[1]}`;
+  }
+  return trimmed;
+}
+
+export function parseTelegramThreadId(input: string): string {
+  const trimmed = input.trim();
+  // Format https://t.me/c/4324462750/6/9 atau https://t.me/c/4324462750/6 -> Thread ID = 6
+  const match = trimmed.match(/t\.me\/c\/\d+\/(\d+)/i);
+  if (match && match[1]) {
+    return match[1];
+  }
+  return trimmed;
+}
+
 export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
   isOpen,
   onClose,
@@ -225,15 +247,18 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                 <MessageSquare className="w-4 h-4 text-sky-600" />
                 Telegram Chat ID / ID Grup <span className="text-rose-500">*</span>
               </span>
-              <span className="text-[11px] text-slate-600 font-normal lowercase">ID Grup biasanya diawali minus (-)</span>
+              <span className="text-[11px] text-slate-500 font-normal">wajib diawali minus (-100...) untuk grup</span>
             </label>
             <input
               type="text"
               value={config.chatId}
-              onChange={(e) => setConfig({ ...config, chatId: e.target.value.trim() })}
-              placeholder="Contoh: -1001987654321 atau 98765432"
+              onChange={(e) => setConfig({ ...config, chatId: parseTelegramChatId(e.target.value) })}
+              placeholder="Contoh: -1004324462750 (bisa paste link t.me langsung)"
               className="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono"
             />
+            <p className="text-[11px] text-slate-500">
+              💡 Jika menyalin link topik seperti <code className="bg-slate-100 px-1 py-0.5 rounded text-sky-700 font-mono text-[10px]">https://t.me/c/4324462750/6/9</code>, ID Grupnya adalah <code className="bg-sky-50 text-sky-800 font-bold px-1.5 py-0.5 rounded font-mono">-1004324462750</code>.
+            </p>
           </div>
 
           {/* Pilihan Jenis Notifikasi */}
@@ -332,8 +357,24 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
               <div className="px-4 pb-4 pt-2 space-y-4 border-t border-sky-200/80 bg-white animate-in fade-in duration-150">
                 <div className="bg-sky-50/80 border border-sky-200 rounded-lg p-3 text-[11px] text-slate-700 leading-relaxed flex items-start gap-2">
                   <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
-                  <div>
-                    <strong>Cara Kerja Pengelompokan:</strong> Jika grup Telegram Anda mengaktifkan mode <strong>Topics (Forum)</strong>, masukkan nomor <strong>Thread ID</strong> untuk tiap sub-topik di bawah. Pesan akan langsung masuk ke sub-topik tersebut! Jika dibiarkan kosong, notifikasi masuk ke ruang chat utama/General.
+                  <div className="space-y-1">
+                    <div>
+                      <strong>Cara Kerja Pengelompokan:</strong> Jika grup Telegram Anda mengaktifkan mode <strong>Topics (Forum)</strong>, masukkan nomor <strong>Thread ID</strong> untuk tiap sub-topik di bawah. Notifikasi akan langsung masuk rapi ke sub-topik tersebut!
+                    </div>
+                    <div className="bg-white/80 border border-sky-200/60 rounded p-2 text-[10px] space-y-0.5">
+                      <span className="font-semibold text-sky-900 block">💡 Contoh jika link topik Anda: <code className="bg-sky-100 text-sky-900 px-1 py-0.5 rounded font-mono">https://t.me/c/4324462750/6/9</code></span>
+                      <ul className="list-disc pl-4 text-slate-600 space-y-0.5">
+                        <li><strong>Chat ID Utama:</strong> <code className="font-mono text-sky-700 font-bold">-1004324462750</code> (angka 4324462750 ditambah -100 di depan)</li>
+                        <li><strong>Thread ID Topik:</strong> <code className="font-mono text-emerald-700 font-bold">6</code> (angka di tengah / nomor topik)</li>
+                        <li><em>Angka 9 adalah ID pesan spesifik, tidak perlu dimasukkan.</em></li>
+                      </ul>
+                      <span className="text-[10px] text-slate-500 block pt-1">
+                        *Anda juga bisa langsung paste link lengkap ke kolom di bawah, angka topik akan otomatis diekstrak!
+                      </span>
+                      <div className="pt-1 mt-1 border-t border-sky-100 text-[10px] text-amber-800">
+                        🛡️ <strong>Anti Gagal:</strong> Jika topik belum dibuat atau ID topik tidak ditemukan di Telegram, sistem akan secara otomatis mengalihkan notifikasi ke ruang chat utama grup agar data mutasi Anda tetap terkirim aman dan tidak hilang.
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -353,8 +394,8 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                       <input
                         type="text"
                         value={config.threadIdMutasiMasuk || ''}
-                        onChange={(e) => setConfig({ ...config, threadIdMutasiMasuk: e.target.value.trim() })}
-                        placeholder="Contoh: 2 (angka thread)"
+                        onChange={(e) => setConfig({ ...config, threadIdMutasiMasuk: parseTelegramThreadId(e.target.value) })}
+                        placeholder="Contoh: 6 (atau paste link t.me)"
                         className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono"
                       />
                     </div>
@@ -365,7 +406,7 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                       <input
                         type="text"
                         value={config.chatIdMutasiMasuk || ''}
-                        onChange={(e) => setConfig({ ...config, chatIdMutasiMasuk: e.target.value.trim() })}
+                        onChange={(e) => setConfig({ ...config, chatIdMutasiMasuk: parseTelegramChatId(e.target.value) })}
                         placeholder="Kosongkan jika pakai Chat ID utama"
                         className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono text-[11px]"
                       />
@@ -387,8 +428,8 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                       <input
                         type="text"
                         value={config.threadIdMutasiKeluar || ''}
-                        onChange={(e) => setConfig({ ...config, threadIdMutasiKeluar: e.target.value.trim() })}
-                        placeholder="Contoh: 5 (angka thread)"
+                        onChange={(e) => setConfig({ ...config, threadIdMutasiKeluar: parseTelegramThreadId(e.target.value) })}
+                        placeholder="Contoh: 6 (atau paste link t.me)"
                         className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono"
                       />
                     </div>
@@ -399,7 +440,7 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                       <input
                         type="text"
                         value={config.chatIdMutasiKeluar || ''}
-                        onChange={(e) => setConfig({ ...config, chatIdMutasiKeluar: e.target.value.trim() })}
+                        onChange={(e) => setConfig({ ...config, chatIdMutasiKeluar: parseTelegramChatId(e.target.value) })}
                         placeholder="Kosongkan jika pakai Chat ID utama"
                         className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono text-[11px]"
                       />
@@ -421,8 +462,8 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                       <input
                         type="text"
                         value={config.threadIdPangkat || ''}
-                        onChange={(e) => setConfig({ ...config, threadIdPangkat: e.target.value.trim() })}
-                        placeholder="Contoh: 10 (angka thread)"
+                        onChange={(e) => setConfig({ ...config, threadIdPangkat: parseTelegramThreadId(e.target.value) })}
+                        placeholder="Contoh: 10 (atau paste link t.me)"
                         className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono"
                       />
                     </div>
@@ -433,7 +474,7 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                       <input
                         type="text"
                         value={config.chatIdPangkat || ''}
-                        onChange={(e) => setConfig({ ...config, chatIdPangkat: e.target.value.trim() })}
+                        onChange={(e) => setConfig({ ...config, chatIdPangkat: parseTelegramChatId(e.target.value) })}
                         placeholder="Kosongkan jika pakai Chat ID utama"
                         className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono text-[11px]"
                       />
@@ -455,8 +496,8 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                       <input
                         type="text"
                         value={config.threadIdKGB || ''}
-                        onChange={(e) => setConfig({ ...config, threadIdKGB: e.target.value.trim() })}
-                        placeholder="Contoh: 14 (angka thread)"
+                        onChange={(e) => setConfig({ ...config, threadIdKGB: parseTelegramThreadId(e.target.value) })}
+                        placeholder="Contoh: 14 (atau paste link t.me)"
                         className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono"
                       />
                     </div>
@@ -467,7 +508,7 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                       <input
                         type="text"
                         value={config.chatIdKGB || ''}
-                        onChange={(e) => setConfig({ ...config, chatIdKGB: e.target.value.trim() })}
+                        onChange={(e) => setConfig({ ...config, chatIdKGB: parseTelegramChatId(e.target.value) })}
                         placeholder="Kosongkan jika pakai Chat ID utama"
                         className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono text-[11px]"
                       />
@@ -547,10 +588,15 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                       Buat topik baru (misal: "Mutasi Masuk", "Mutasi Keluar", "Kenaikan Pangkat", "KGB").
                     </li>
                     <li>
-                      Buka sub-topik tersebut &rarr; klik ikon titik tiga di pojok kanan atas &rarr; pilih <b>Copy Link</b>.
+                      Buka sub-topik tersebut &rarr; klik ikon titik tiga di pojok kanan atas &rarr; pilih <b>Copy Link</b> (atau klik kanan pesan &rarr; Copy Message Link).
                     </li>
                     <li>
-                      Link akan berbentuk <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700 font-mono text-[10px]">https://t.me/c/1234567890/42</code>. Angka paling ujung (<code className="font-bold text-indigo-800">42</code>) adalah <b>Thread ID</b> topik tersebut!
+                      Link akan berbentuk <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700 font-mono text-[10px]">https://t.me/c/4324462750/6/9</code> atau <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700 font-mono text-[10px]">https://t.me/c/4324462750/6</code>:
+                      <div className="mt-1 pl-2 border-l-2 border-indigo-300 space-y-0.5 text-[11px]">
+                        <div>• <b>Chat ID Grup:</b> <code className="text-sky-700 font-bold font-mono">-1004324462750</code></div>
+                        <div>• <b>Thread ID (Topik):</b> <code className="text-emerald-700 font-bold font-mono">6</code> (angka di tengah adalah nomor topiknya)</div>
+                        <div>• <em>Angka 9 paling ujung adalah nomor pesan (abaikan).</em></div>
+                      </div>
                     </li>
                   </ul>
                 </div>
