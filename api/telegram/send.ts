@@ -42,16 +42,24 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    const threadId = body.threadId || body.message_thread_id;
+
+    const payload: Record<string, any> = {
+      chat_id: chatId,
+      text: message,
+      parse_mode: 'HTML',
+      disable_web_page_preview: false,
+    };
+    if (threadId) {
+      const numThread = Number(threadId);
+      payload.message_thread_id = !isNaN(numThread) ? numThread : threadId;
+    }
+
     const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
     const tgRes = await fetch(telegramUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: message,
-        parse_mode: 'HTML',
-        disable_web_page_preview: false,
-      }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(15000),
     });
 
