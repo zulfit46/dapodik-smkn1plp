@@ -1,4 +1,4 @@
-import { MutasiMasukItem, MutasiKeluarItem, TelegramConfig } from '../types';
+import { MutasiMasukItem, MutasiKeluarItem, TelegramConfig, RiwayatPangkat, RiwayatKGB } from '../types';
 import { safeGetItem, safeSetItem } from '../utils/storage';
 
 const STORAGE_KEY = 'dapodik_telegram_config';
@@ -9,6 +9,8 @@ export const DEFAULT_TELEGRAM_CONFIG: TelegramConfig = {
   enabled: false,
   notifyMutasiMasuk: true,
   notifyMutasiKeluar: true,
+  notifyPangkatBaru: true,
+  notifyKGBBaru: true,
 };
 
 /**
@@ -42,6 +44,8 @@ export async function getTelegramConfig(): Promise<TelegramConfig> {
         enabled: localConfig.enabled ?? serverConfig.enabled ?? false,
         notifyMutasiMasuk: localConfig.notifyMutasiMasuk ?? serverConfig.notifyMutasiMasuk ?? true,
         notifyMutasiKeluar: localConfig.notifyMutasiKeluar ?? serverConfig.notifyMutasiKeluar ?? true,
+        notifyPangkatBaru: localConfig.notifyPangkatBaru ?? serverConfig.notifyPangkatBaru ?? true,
+        notifyKGBBaru: localConfig.notifyKGBBaru ?? serverConfig.notifyKGBBaru ?? true,
       };
       safeSetItem(STORAGE_KEY, merged);
       return merged;
@@ -50,7 +54,12 @@ export async function getTelegramConfig(): Promise<TelegramConfig> {
     // Ignore server error and return local config
   }
 
-  return localConfig;
+  return {
+    ...DEFAULT_TELEGRAM_CONFIG,
+    ...localConfig,
+    notifyPangkatBaru: localConfig.notifyPangkatBaru ?? true,
+    notifyKGBBaru: localConfig.notifyKGBBaru ?? true,
+  };
 }
 
 /**
@@ -214,6 +223,75 @@ export async function notifyMutasiMasuk(
 📅 <b>Tanggal Masuk:</b> ${escapeTelegramHtml(tgl)}
 📌 <b>Status:</b> <b>${escapeTelegramHtml(item.status || 'Pending')}</b>
 📝 <b>Keterangan:</b> ${escapeTelegramHtml(item.keterangan || '-')}
+━━━━━━━━━━━━━━━━━━━━
+⏰ <i>Waktu Input: ${escapeTelegramHtml(waktuStr)}</i>
+🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>`;
+
+  return sendTelegramMessage(message, conf);
+}
+
+/**
+ * Format & Send Notification for Riwayat Kenaikan Pangkat Baru
+ */
+export async function notifyPangkatBaru(
+  item: Partial<RiwayatPangkat>,
+  config?: TelegramConfig
+): Promise<{ success: boolean; message: string }> {
+  const conf = config || await getTelegramConfig();
+  if (!conf.enabled || !conf.notifyPangkatBaru) {
+    return { success: false, message: 'Notifikasi Kenaikan Pangkat tidak diaktifkan' };
+  }
+
+  const now = new Date();
+  const waktuStr = `${now.toLocaleDateString('id-ID')} ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+
+  const message = `🎖️ <b>NOTIFIKASI RIWAYAT KENAIKAN PANGKAT BARU</b>
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>Nama GTK:</b> ${escapeTelegramHtml(item.nama || '-')}
+🆔 <b>NIP:</b> <code>${escapeTelegramHtml(item.nip || '-')}</code>
+📊 <b>Golongan/Pangkat:</b> <b>${escapeTelegramHtml(item.gol || '-')}</b>
+📄 <b>No. SK Pangkat:</b> ${escapeTelegramHtml(item.noSk || '-')}
+📅 <b>Tanggal SK:</b> ${escapeTelegramHtml(item.tglSk || '-')}
+🗓️ <b>TMT Pangkat:</b> <b>${escapeTelegramHtml(item.tmt || '-')}</b>
+⏳ <b>Masa Kerja:</b> ${escapeTelegramHtml(item.masaKerjaThn ?? 0)} Tahun ${escapeTelegramHtml(item.masaKerjaBln ?? 0)} Bulan
+📌 <b>Status:</b> <b>${escapeTelegramHtml(item.status || 'Proses')}</b>
+━━━━━━━━━━━━━━━━━━━━
+⏰ <i>Waktu Input: ${escapeTelegramHtml(waktuStr)}</i>
+🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>`;
+
+  return sendTelegramMessage(message, conf);
+}
+
+/**
+ * Format & Send Notification for Riwayat KGB Baru
+ */
+export async function notifyKGBBaru(
+  item: Partial<RiwayatKGB>,
+  config?: TelegramConfig
+): Promise<{ success: boolean; message: string }> {
+  const conf = config || await getTelegramConfig();
+  if (!conf.enabled || !conf.notifyKGBBaru) {
+    return { success: false, message: 'Notifikasi KGB tidak diaktifkan' };
+  }
+
+  const now = new Date();
+  const waktuStr = `${now.toLocaleDateString('id-ID')} ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+
+  const gajiFormatted = item.gajiPokok
+    ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(item.gajiPokok)
+    : '-';
+
+  const message = `💰 <b>NOTIFIKASI RIWAYAT KGB BARU</b>
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>Nama GTK:</b> ${escapeTelegramHtml(item.nama || '-')}
+🆔 <b>NIP:</b> <code>${escapeTelegramHtml(item.nip || '-')}</code>
+📊 <b>Golongan:</b> <b>${escapeTelegramHtml(item.gol || '-')}</b>
+📄 <b>No. SK KGB:</b> ${escapeTelegramHtml(item.noSk || '-')}
+📅 <b>Tanggal SK:</b> ${escapeTelegramHtml(item.tglSk || '-')}
+🗓️ <b>TMT KGB:</b> <b>${escapeTelegramHtml(item.tmt || '-')}</b>
+⏳ <b>Masa Kerja:</b> ${escapeTelegramHtml(item.masaKerjaThn ?? 0)} Tahun ${escapeTelegramHtml(item.masaKerjaBln ?? 0)} Bulan
+💵 <b>Gaji Pokok Baru:</b> <b>${escapeTelegramHtml(gajiFormatted)}</b>
+📌 <b>Status:</b> <b>${escapeTelegramHtml(item.status || 'Proses')}</b>
 ━━━━━━━━━━━━━━━━━━━━
 ⏰ <i>Waktu Input: ${escapeTelegramHtml(waktuStr)}</i>
 🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>`;

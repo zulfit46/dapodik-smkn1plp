@@ -35,6 +35,7 @@ import { SyncSuccessModal, SavedDetailItem } from './SyncSuccessModal';
 import { DuplicateWarningModal } from './DuplicateWarningModal';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 import { isUserRole, isOwnerOfRecord } from '../utils/authUtils';
+import { notifyPangkatBaru } from '../services/telegramService';
 
 const STORAGE_KEY = 'smkn1_riwayat_pangkat_data';
 
@@ -715,6 +716,11 @@ export const GTKPangkatView: React.FC<GTKPangkatViewProps> = ({
             body: JSON.stringify(newEntry)
           }).catch(e => console.warn('Backend create error:', e));
         }
+
+        // 3. Kirim notifikasi Telegram untuk data kenaikan pangkat baru
+        notifyPangkatBaru(newEntry).catch(err => {
+          console.warn('Telegram notification for pangkat failed:', err);
+        });
       }
     } catch (err: any) {
       setFeedbackMsg({ type: 'error', text: err?.message || 'Gagal menyimpan data ke Spreadsheet' });

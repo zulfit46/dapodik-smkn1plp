@@ -35,6 +35,7 @@ import { SyncSuccessModal, SavedDetailItem } from './SyncSuccessModal';
 import { DuplicateWarningModal } from './DuplicateWarningModal';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 import { isUserRole, isOwnerOfRecord } from '../utils/authUtils';
+import { notifyKGBBaru } from '../services/telegramService';
 
 const STORAGE_KEY = 'smkn1_riwayat_kgb_data';
 
@@ -726,6 +727,11 @@ export const GTKKGBView: React.FC<GTKKGBViewProps> = ({
             body: JSON.stringify(newEntry)
           }).catch(e => console.warn('Backend create error:', e));
         }
+
+        // 3. Kirim notifikasi Telegram untuk data KGB baru
+        notifyKGBBaru(newEntry).catch(err => {
+          console.warn('Telegram notification for KGB failed:', err);
+        });
       }
     } catch (err: any) {
       setFeedbackMsg({ type: 'error', text: err?.message || 'Gagal menyimpan data ke Spreadsheet' });

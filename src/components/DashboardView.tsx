@@ -575,7 +575,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       : 'bg-slate-50/80 hover:bg-slate-100/80 border border-transparent'
                   }`}
                 >
-                  <span className="text-[11px] text-slate-500 font-medium">Tingkat 10</span>
+                  <span className="text-[11px] text-slate-500 font-medium">Tingkat X</span>
                   <p className="text-sm sm:text-base font-extrabold text-slate-900">{kelasX} Siswa</p>
                   <span className="text-[10px] font-bold text-purple-600">{pctX}%</span>
                 </div>
@@ -588,7 +588,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       : 'bg-slate-50/80 hover:bg-slate-100/80 border border-transparent'
                   }`}
                 >
-                  <span className="text-[11px] text-slate-500 font-medium">Tingkat 11</span>
+                  <span className="text-[11px] text-slate-500 font-medium">Tingkat XI</span>
                   <p className="text-sm sm:text-base font-extrabold text-slate-900">{kelasXI} Siswa</p>
                   <span className="text-[10px] font-bold text-cyan-600">{pctXI}%</span>
                 </div>
@@ -601,7 +601,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       : 'bg-slate-50/80 hover:bg-slate-100/80 border border-transparent'
                   }`}
                 >
-                  <span className="text-[11px] text-slate-500 font-medium">Tingkat 12</span>
+                  <span className="text-[11px] text-slate-500 font-medium">Tingkat XII</span>
                   <p className="text-sm sm:text-base font-extrabold text-slate-900">{kelasXII} Siswa</p>
                   <span className="text-[10px] font-bold text-pink-600">{pctXII}%</span>
                 </div>

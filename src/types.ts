@@ -160,6 +160,8 @@ export interface TelegramConfig {
   enabled: boolean;
   notifyMutasiMasuk: boolean;
   notifyMutasiKeluar: boolean;
+  notifyPangkatBaru: boolean;
+  notifyKGBBaru: boolean;
 }
 
 export interface GTKData {

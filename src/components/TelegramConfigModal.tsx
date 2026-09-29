@@ -40,6 +40,8 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
     enabled: false,
     notifyMutasiMasuk: true,
     notifyMutasiKeluar: true,
+    notifyPangkatBaru: true,
+    notifyKGBBaru: true,
   });
 
   const [showToken, setShowToken] = useState(false);
@@ -236,6 +238,32 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                 <div className="text-xs">
                   <div className="font-semibold text-slate-800">📤 Mutasi Keluar</div>
                   <div className="text-slate-600 text-[11px]">Siswa pindah / keluar</div>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors bg-white">
+                <input
+                  type="checkbox"
+                  checked={config.notifyPangkatBaru}
+                  onChange={(e) => setConfig({ ...config, notifyPangkatBaru: e.target.checked })}
+                  className="rounded text-sky-600 focus:ring-sky-500 w-4 h-4"
+                />
+                <div className="text-xs">
+                  <div className="font-semibold text-slate-800">🎖️ Kenaikan Pangkat</div>
+                  <div className="text-slate-600 text-[11px]">Data riwayat kepangkatan baru</div>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors bg-white">
+                <input
+                  type="checkbox"
+                  checked={config.notifyKGBBaru}
+                  onChange={(e) => setConfig({ ...config, notifyKGBBaru: e.target.checked })}
+                  className="rounded text-sky-600 focus:ring-sky-500 w-4 h-4"
+                />
+                <div className="text-xs">
+                  <div className="font-semibold text-slate-800">💰 Kenaikan Gaji Berkala</div>
+                  <div className="text-slate-600 text-[11px]">Data riwayat KGB baru</div>
                 </div>
               </label>
             </div>
