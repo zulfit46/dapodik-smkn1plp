@@ -774,6 +774,41 @@ function doPost(e) {
 
     const action = contents.action || "update";
 
+    // -2. FORWARD / RELAY NOTIFIKASI KE TELEGRAM BOT (Google Cloud to Telegram - Anti CORS & Anti Blokir ISP)
+    if (action === "sendTelegram" || action === "telegramNotify") {
+      var botToken = contents.botToken || "";
+      var chatId = contents.chatId || "";
+      var message = contents.message || contents.text || "";
+      if (!botToken || !chatId || !message) {
+        return responseJSON({ status: "error", message: "Parameter botToken, chatId, dan message wajib diisi" });
+      }
+      try {
+        var tgUrl = "https://api.telegram.org/bot" + botToken.trim() + "/sendMessage";
+        var tgResp = UrlFetchApp.fetch(tgUrl, {
+          method: "post",
+          contentType: "application/json",
+          payload: JSON.stringify({
+            chat_id: String(chatId).trim(),
+            text: message,
+            parse_mode: "HTML",
+            disable_web_page_preview: false
+          }),
+          muteHttpExceptions: true
+        });
+        var tgCode = tgResp.getResponseCode();
+        var tgText = tgResp.getContentText();
+        var tgParsed = {};
+        try { tgParsed = JSON.parse(tgText); } catch(e) {}
+        if (tgCode >= 200 && tgCode < 300 && tgParsed.ok) {
+          return responseJSON({ status: "success", message: "Notifikasi Telegram berhasil dikirim via Google Apps Script", result: tgParsed });
+        } else {
+          return responseJSON({ status: "error", message: tgParsed.description || ("Telegram HTTP " + tgCode), details: tgText });
+        }
+      } catch (tgErr) {
+        return responseJSON({ status: "error", message: "Gagal memanggil Telegram API dari Apps Script: " + tgErr.message });
+      }
+    }
+
     // -1. UPLOAD BERKAS KE GOOGLE DRIVE (MUTASI KELUAR / BERKAS PENDUKUNG)
     if (action === "uploadBerkasMutasi" || action === "uploadBerkas" || action === "uploadFile" || action === "upload") {
       const folderId = contents.folderId || "1sGqbpA6uctgvOmYUwyxNP8pC5ORZUy56";

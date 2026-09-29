@@ -607,7 +607,7 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
 
     // Kirim notifikasi Telegram otomatis untuk data mutasi masuk baru
     if (!editingItem) {
-      notifyMutasiMasuk(targetItem, telegramConfig)
+      notifyMutasiMasuk(targetItem, telegramConfig, appConfig.webAppUrl)
         .then(tRes => {
           if (tRes.success) {
             console.log('[Telegram] Notifikasi mutasi masuk terkirim:', tRes.message);
@@ -1143,7 +1143,7 @@ export const MutasiView: React.FC<MutasiViewProps> = ({
 
     // Kirim notifikasi Telegram otomatis untuk data mutasi keluar baru
     if (!editingKeluarItem) {
-      notifyMutasiKeluar(targetItem, telegramConfig)
+      notifyMutasiKeluar(targetItem, telegramConfig, appConfig.webAppUrl)
         .then(tRes => {
           if (tRes.success) {
             console.log('[Telegram] Notifikasi mutasi keluar terkirim:', tRes.message);

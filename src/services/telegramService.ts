@@ -3,10 +3,23 @@ import { safeGetItem, safeSetItem } from '../utils/storage';
 
 const STORAGE_KEY = 'dapodik_telegram_config';
 
+// Deteksi otomatis token & chat ID dari Environment Variables (Vercel / Vite build)
+const ENV_BOT_TOKEN = (
+  ((import.meta as any).env?.VITE_TELEGRAM_BOT_TOKEN as string) ||
+  (typeof process !== 'undefined' ? (process.env.TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN) : '') ||
+  ''
+).trim();
+
+const ENV_CHAT_ID = (
+  ((import.meta as any).env?.VITE_TELEGRAM_CHAT_ID as string) ||
+  (typeof process !== 'undefined' ? (process.env.TELEGRAM_CHAT_ID || process.env.VITE_TELEGRAM_CHAT_ID) : '') ||
+  ''
+).trim();
+
 export const DEFAULT_TELEGRAM_CONFIG: TelegramConfig = {
-  botToken: '',
-  chatId: '',
-  enabled: false,
+  botToken: ENV_BOT_TOKEN,
+  chatId: ENV_CHAT_ID,
+  enabled: Boolean(ENV_BOT_TOKEN && ENV_CHAT_ID),
   notifyMutasiMasuk: true,
   notifyMutasiKeluar: true,
   notifyPangkatBaru: true,
@@ -25,23 +38,26 @@ export function escapeTelegramHtml(text?: string | number | null): string {
 }
 
 /**
- * Get current Telegram configuration from localStorage or server
+ * Get current Telegram configuration from localStorage or server/env
  */
 export async function getTelegramConfig(): Promise<TelegramConfig> {
-  let localConfig: TelegramConfig = safeGetItem<TelegramConfig>(STORAGE_KEY, DEFAULT_TELEGRAM_CONFIG);
+  const localConfig: TelegramConfig = safeGetItem<TelegramConfig>(STORAGE_KEY, DEFAULT_TELEGRAM_CONFIG);
 
-  // Also try fetching from server to get any server-configured defaults/env vars
+  // Try fetching from server (Express atau Vercel Serverless /api/telegram/config)
   try {
     const res = await fetch('/api/telegram/config', {
       headers: { 'Accept': 'application/json' },
       signal: AbortSignal.timeout(4000),
     });
-    if (res.ok) {
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
       const serverConfig = await res.json();
+      const resolvedToken = localConfig.botToken || serverConfig.botToken || ENV_BOT_TOKEN || '';
+      const resolvedChatId = localConfig.chatId || serverConfig.chatId || ENV_CHAT_ID || '';
       const merged: TelegramConfig = {
-        botToken: localConfig.botToken || serverConfig.botToken || '',
-        chatId: localConfig.chatId || serverConfig.chatId || '',
-        enabled: localConfig.enabled ?? serverConfig.enabled ?? false,
+        botToken: resolvedToken,
+        chatId: resolvedChatId,
+        enabled: localConfig.enabled ?? serverConfig.enabled ?? Boolean(resolvedToken && resolvedChatId),
         notifyMutasiMasuk: localConfig.notifyMutasiMasuk ?? serverConfig.notifyMutasiMasuk ?? true,
         notifyMutasiKeluar: localConfig.notifyMutasiKeluar ?? serverConfig.notifyMutasiKeluar ?? true,
         notifyPangkatBaru: localConfig.notifyPangkatBaru ?? serverConfig.notifyPangkatBaru ?? true,
@@ -54,9 +70,15 @@ export async function getTelegramConfig(): Promise<TelegramConfig> {
     // Ignore server error and return local config
   }
 
+  const token = localConfig.botToken || ENV_BOT_TOKEN || '';
+  const chat = localConfig.chatId || ENV_CHAT_ID || '';
+
   return {
     ...DEFAULT_TELEGRAM_CONFIG,
     ...localConfig,
+    botToken: token,
+    chatId: chat,
+    enabled: localConfig.enabled ?? Boolean(token && chat),
     notifyPangkatBaru: localConfig.notifyPangkatBaru ?? true,
     notifyKGBBaru: localConfig.notifyKGBBaru ?? true,
   };
@@ -75,18 +97,21 @@ export async function saveTelegramConfig(config: TelegramConfig): Promise<{ succ
       body: JSON.stringify(config),
       signal: AbortSignal.timeout(5000),
     });
-    if (res.ok) {
-      return { success: true, message: 'Pengaturan Telegram berhasil disimpan' };
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
+      return { success: true, message: 'Pengaturan Telegram berhasil disimpan di server & browser' };
     }
   } catch (err) {
     console.warn('Simpan konfigurasi ke server gagal, tersimpan lokal:', err);
   }
 
-  return { success: true, message: 'Pengaturan Telegram tersimpan di browser' };
+  return { success: true, message: 'Pengaturan Telegram tersimpan di browser (localStorage)' };
 }
 
 /**
- * Direct Telegram Bot API send function (used if server is unreachable)
+ * Direct Telegram Bot API send function (CORS-safe simple request via form-urlencoded)
+ * Catatan penting: Telegram API mengembalikan HTTP 501 jika browser mengirim OPTIONS preflight dengan Content-Type: application/json.
+ * Dengan application/x-www-form-urlencoded, browser mengirim Simple CORS Request tanpa OPTIONS preflight!
  */
 async function sendDirectToTelegram(botToken: string, chatId: string, htmlMessage: string): Promise<{ ok: boolean; description?: string }> {
   const cleanToken = botToken.trim();
@@ -96,42 +121,78 @@ async function sendDirectToTelegram(botToken: string, chatId: string, htmlMessag
   }
 
   const url = `https://api.telegram.org/bot${cleanToken}/sendMessage`;
+  const params = new URLSearchParams();
+  params.append('chat_id', cleanChatId);
+  params.append('text', htmlMessage);
+  params.append('parse_mode', 'HTML');
+  params.append('disable_web_page_preview', 'false');
+
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: cleanChatId,
-      text: htmlMessage,
-      parse_mode: 'HTML',
-      disable_web_page_preview: false,
-    }),
-    signal: AbortSignal.timeout(10000),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+    signal: AbortSignal.timeout(12000),
   });
 
   const data = await res.json();
   if (!res.ok || !data.ok) {
-    throw new Error(data.description || `HTTP ${res.status}: Gagal mengirim pesan ke Telegram`);
+    throw new Error(data.description || `HTTP ${res.status}: Gagal mengirim pesan ke Telegram API`);
   }
 
   return data;
 }
 
 /**
- * Unified sender: uses server proxy first (to avoid CORS/network issues), falls back to direct API
+ * Optional fallback: Kirim lewat Google Apps Script Web App jika server proxy & direct API terblokir ISP
+ */
+async function sendViaGoogleAppsScript(webAppUrl: string, botToken: string, chatId: string, htmlMessage: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(webAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'sendTelegram',
+        botToken: botToken.trim(),
+        chatId: chatId.trim(),
+        message: htmlMessage,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && (data.status === 'success' || data.ok)) {
+        return { success: true, message: 'Pesan berhasil terkirim via Google Apps Script relay' };
+      }
+    }
+  } catch (gasErr) {
+    console.warn('[Telegram] Google Apps Script relay failed:', gasErr);
+  }
+  throw new Error('Gagal mengirim via Google Apps Script relay');
+}
+
+/**
+ * Unified sender:
+ * 1. Coba server proxy (/api/telegram/send - Express atau Vercel Serverless Function)
+ * 2. Fallback direct Telegram API dengan CORS-safe form-urlencoded
+ * 3. Fallback Google Apps Script jika tersedia
  */
 export async function sendTelegramMessage(
   message: string,
-  customConfig?: Partial<TelegramConfig>
+  customConfig?: Partial<TelegramConfig>,
+  webAppUrl?: string
 ): Promise<{ success: boolean; message: string }> {
   const currentConfig = customConfig?.botToken ? { ...DEFAULT_TELEGRAM_CONFIG, ...customConfig } : await getTelegramConfig();
-  const botToken = (customConfig?.botToken || currentConfig.botToken || '').trim();
-  const chatId = (customConfig?.chatId || currentConfig.chatId || '').trim();
+  const botToken = (customConfig?.botToken || currentConfig.botToken || ENV_BOT_TOKEN || '').trim();
+  const chatId = (customConfig?.chatId || currentConfig.chatId || ENV_CHAT_ID || '').trim();
 
   if (!botToken || !chatId) {
-    return { success: false, message: 'Bot Token atau Chat ID belum dikonfigurasi' };
+    return {
+      success: false,
+      message: 'Bot Token atau Chat ID belum dikonfigurasi. Silakan buka menu Pengaturan Telegram untuk mengisinya.',
+    };
   }
 
-  // 1. Try server proxy endpoint
+  // 1. Coba Server Proxy endpoint (/api/telegram/send - berfungsi di Express lokal & Vercel Serverless)
   try {
     const res = await fetch('/api/telegram/send', {
       method: 'POST',
@@ -144,25 +205,37 @@ export async function sendTelegramMessage(
       signal: AbortSignal.timeout(10000),
     });
 
-    if (res.ok) {
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
       const data = await res.json();
       if (data.status === 'success') {
         return { success: true, message: 'Pesan berhasil terkirim ke Telegram' };
       }
-      throw new Error(data.message || 'Gagal mengirim melalui server');
+      throw new Error(data.message || 'Gagal mengirim melalui server proxy');
     }
   } catch (serverErr: any) {
-    console.warn('[Telegram] Proxy server failed, trying direct Telegram API:', serverErr);
+    console.warn('[Telegram] Proxy server unavailable or failed, trying direct Telegram API:', serverErr);
   }
 
-  // 2. Direct fallback
+  // 2. Direct Telegram API fallback (CORS simple request)
   try {
     await sendDirectToTelegram(botToken, chatId, message);
-    return { success: true, message: 'Pesan berhasil terkirim ke Telegram' };
+    return { success: true, message: 'Pesan berhasil terkirim langsung ke Telegram' };
   } catch (directErr: any) {
+    console.warn('[Telegram] Direct send failed:', directErr);
+
+    // 3. Fallback ke Google Apps Script Web App jika direct API diblokir ISP lokal
+    if (webAppUrl) {
+      try {
+        return await sendViaGoogleAppsScript(webAppUrl, botToken, chatId, message);
+      } catch (gasErr: any) {
+        console.warn('[Telegram] Fallback to Google Apps Script also failed:', gasErr);
+      }
+    }
+
     return {
       success: false,
-      message: directErr?.message || 'Gagal terhubung ke Telegram API. Periksa Token & Chat ID Anda.',
+      message: directErr?.message || 'Gagal terhubung ke Telegram API. Periksa Bot Token, Chat ID, atau koneksi internet Anda.',
     };
   }
 }
@@ -198,7 +271,8 @@ export async function testTelegramConnection(
  */
 export async function notifyMutasiMasuk(
   item: Partial<MutasiMasukItem>,
-  config?: TelegramConfig
+  config?: TelegramConfig,
+  webAppUrl?: string
 ): Promise<{ success: boolean; message: string }> {
   const conf = config || await getTelegramConfig();
   if (!conf.enabled || !conf.notifyMutasiMasuk) {
@@ -227,7 +301,7 @@ export async function notifyMutasiMasuk(
 ⏰ <i>Waktu Input: ${escapeTelegramHtml(waktuStr)}</i>
 🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>`;
 
-  return sendTelegramMessage(message, conf);
+  return sendTelegramMessage(message, conf, webAppUrl);
 }
 
 /**
@@ -235,7 +309,8 @@ export async function notifyMutasiMasuk(
  */
 export async function notifyPangkatBaru(
   item: Partial<RiwayatPangkat>,
-  config?: TelegramConfig
+  config?: TelegramConfig,
+  webAppUrl?: string
 ): Promise<{ success: boolean; message: string }> {
   const conf = config || await getTelegramConfig();
   if (!conf.enabled || !conf.notifyPangkatBaru) {
@@ -259,7 +334,7 @@ export async function notifyPangkatBaru(
 ⏰ <i>Waktu Input: ${escapeTelegramHtml(waktuStr)}</i>
 🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>`;
 
-  return sendTelegramMessage(message, conf);
+  return sendTelegramMessage(message, conf, webAppUrl);
 }
 
 /**
@@ -267,7 +342,8 @@ export async function notifyPangkatBaru(
  */
 export async function notifyKGBBaru(
   item: Partial<RiwayatKGB>,
-  config?: TelegramConfig
+  config?: TelegramConfig,
+  webAppUrl?: string
 ): Promise<{ success: boolean; message: string }> {
   const conf = config || await getTelegramConfig();
   if (!conf.enabled || !conf.notifyKGBBaru) {
@@ -296,7 +372,7 @@ export async function notifyKGBBaru(
 ⏰ <i>Waktu Input: ${escapeTelegramHtml(waktuStr)}</i>
 🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>`;
 
-  return sendTelegramMessage(message, conf);
+  return sendTelegramMessage(message, conf, webAppUrl);
 }
 
 /**
@@ -304,7 +380,8 @@ export async function notifyKGBBaru(
  */
 export async function notifyMutasiKeluar(
   item: Partial<MutasiKeluarItem>,
-  config?: TelegramConfig
+  config?: TelegramConfig,
+  webAppUrl?: string
 ): Promise<{ success: boolean; message: string }> {
   const conf = config || await getTelegramConfig();
   if (!conf.enabled || !conf.notifyMutasiKeluar) {
@@ -336,5 +413,5 @@ export async function notifyMutasiKeluar(
 ⏰ <i>Waktu Input: ${escapeTelegramHtml(waktuStr)}</i>
 🏛️ <i>Sistem Informasi Data Siswa Dapodik</i>`;
 
-  return sendTelegramMessage(message, conf);
+  return sendTelegramMessage(message, conf, webAppUrl);
 }

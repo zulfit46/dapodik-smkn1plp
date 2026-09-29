@@ -47,6 +47,8 @@ let telegramConfig = {
   enabled: false,
   notifyMutasiMasuk: true,
   notifyMutasiKeluar: true,
+  notifyPangkatBaru: true,
+  notifyKGBBaru: true,
 };
 
 try {
@@ -2330,18 +2332,22 @@ async function startServer() {
       enabled: Boolean(telegramConfig.enabled),
       notifyMutasiMasuk: telegramConfig.notifyMutasiMasuk !== false,
       notifyMutasiKeluar: telegramConfig.notifyMutasiKeluar !== false,
+      notifyPangkatBaru: telegramConfig.notifyPangkatBaru !== false,
+      notifyKGBBaru: telegramConfig.notifyKGBBaru !== false,
     });
   });
 
   app.post("/api/telegram/config", (req, res) => {
     try {
-      const { botToken, chatId, enabled, notifyMutasiMasuk, notifyMutasiKeluar } = req.body;
+      const { botToken, chatId, enabled, notifyMutasiMasuk, notifyMutasiKeluar, notifyPangkatBaru, notifyKGBBaru } = req.body;
       telegramConfig = {
         botToken: typeof botToken === "string" ? botToken.trim() : telegramConfig.botToken,
         chatId: typeof chatId === "string" ? chatId.trim() : telegramConfig.chatId,
         enabled: typeof enabled === "boolean" ? enabled : telegramConfig.enabled,
         notifyMutasiMasuk: typeof notifyMutasiMasuk === "boolean" ? notifyMutasiMasuk : telegramConfig.notifyMutasiMasuk,
         notifyMutasiKeluar: typeof notifyMutasiKeluar === "boolean" ? notifyMutasiKeluar : telegramConfig.notifyMutasiKeluar,
+        notifyPangkatBaru: typeof notifyPangkatBaru === "boolean" ? notifyPangkatBaru : telegramConfig.notifyPangkatBaru,
+        notifyKGBBaru: typeof notifyKGBBaru === "boolean" ? notifyKGBBaru : telegramConfig.notifyKGBBaru,
       };
 
       try {
@@ -2359,6 +2365,8 @@ async function startServer() {
           enabled: telegramConfig.enabled,
           notifyMutasiMasuk: telegramConfig.notifyMutasiMasuk,
           notifyMutasiKeluar: telegramConfig.notifyMutasiKeluar,
+          notifyPangkatBaru: telegramConfig.notifyPangkatBaru,
+          notifyKGBBaru: telegramConfig.notifyKGBBaru,
         }
       });
     } catch (err: any) {

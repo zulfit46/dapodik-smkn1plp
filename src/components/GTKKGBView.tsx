@@ -20,12 +20,13 @@ import {
   Lock,
   Info,
   Eye,
-  Sparkles
+  Sparkles,
+  Send
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { GTKData, RiwayatKGB, AppConfig } from '../types';
+import { GTKData, RiwayatKGB, AppConfig, TelegramConfig } from '../types';
 import { INITIAL_GTK_LIST } from '../data/initialGTK';
 import { INITIAL_RIWAYAT_KGB, DAFTAR_GOLONGAN_PNS, DAFTAR_GOLONGAN_PPPK, DAFTAR_GOLONGAN_PANGKAT } from '../data/initialPangkatKGB';
 import { fetchKGBDirectly, saveKGBDirectly, syncAllKGBDirectly, deleteKGBDirectly, formatToDDMMYYYY } from '../services/sheetsSync';
@@ -34,8 +35,9 @@ import { formatDisplayDate, parseToYYYYMMDD, formatRupiah } from '../utils/dateU
 import { SyncSuccessModal, SavedDetailItem } from './SyncSuccessModal';
 import { DuplicateWarningModal } from './DuplicateWarningModal';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
+import { TelegramConfigModal } from './TelegramConfigModal';
 import { isUserRole, isOwnerOfRecord } from '../utils/authUtils';
-import { notifyKGBBaru } from '../services/telegramService';
+import { notifyKGBBaru, getTelegramConfig } from '../services/telegramService';
 
 const STORAGE_KEY = 'smkn1_riwayat_kgb_data';
 
@@ -118,6 +120,22 @@ export const GTKKGBView: React.FC<GTKKGBViewProps> = ({
     item: null,
     isDeleting: false
   });
+
+  // Telegram Bot Notification State
+  const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
+  const [telegramConfig, setTelegramConfig] = useState<TelegramConfig>({
+    botToken: '',
+    chatId: '',
+    enabled: false,
+    notifyMutasiMasuk: true,
+    notifyMutasiKeluar: true,
+    notifyPangkatBaru: true,
+    notifyKGBBaru: true,
+  });
+
+  useEffect(() => {
+    getTelegramConfig().then(setTelegramConfig).catch(() => {});
+  }, []);
 
   // Save to safe storage
   useEffect(() => {
@@ -729,9 +747,15 @@ export const GTKKGBView: React.FC<GTKKGBViewProps> = ({
         }
 
         // 3. Kirim notifikasi Telegram untuk data KGB baru
-        notifyKGBBaru(newEntry).catch(err => {
-          console.warn('Telegram notification for KGB failed:', err);
-        });
+        notifyKGBBaru(newEntry, undefined, appConfig.webAppUrl)
+          .then(tgRes => {
+            if (tgRes && tgRes.success) {
+              console.log('Notifikasi Telegram KGB berhasil:', tgRes.message);
+            }
+          })
+          .catch(err => {
+            console.warn('Telegram notification for KGB failed:', err);
+          });
       }
     } catch (err: any) {
       setFeedbackMsg({ type: 'error', text: err?.message || 'Gagal menyimpan data ke Spreadsheet' });
@@ -1381,6 +1405,31 @@ export const GTKKGBView: React.FC<GTKKGBViewProps> = ({
                 <RefreshCw className={`w-4 h-4 text-teal-600 ${isLoading ? 'animate-spin' : ''}`} />
                 <span>{isLoading ? 'Memuat...' : 'Muat Ulang'}</span>
               </button>
+
+              {/* Tombol Pengaturan Notifikasi Telegram (Hanya Tampil untuk Admin) */}
+              {!isUser && (
+                <button
+                  type="button"
+                  onClick={() => setIsTelegramModalOpen(true)}
+                  className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs shrink-0 ${
+                    telegramConfig.enabled
+                      ? 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-100 hover:border-sky-400'
+                      : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-800'
+                  }`}
+                  title="Pengaturan Notifikasi Bot Telegram (Admin)"
+                >
+                  <Send className="w-3.5 h-3.5 text-sky-500" />
+                  <span className="hidden sm:inline">Notifikasi Telegram</span>
+                  <span className="sm:hidden">Telegram</span>
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      telegramConfig.enabled
+                        ? 'bg-emerald-500 ring-2 ring-emerald-200 animate-pulse'
+                        : 'bg-slate-300'
+                    }`}
+                  />
+                </button>
+              )}
             </div>
           </div>
 
@@ -1592,6 +1641,15 @@ export const GTKKGBView: React.FC<GTKKGBViewProps> = ({
           { label: 'Gaji Pokok', value: formatRupiah(deleteModalState.item.gajiPokok || 0) }
         ] : []}
       />
+
+      {/* Telegram Config Modal */}
+      {!isUser && (
+        <TelegramConfigModal
+          isOpen={isTelegramModalOpen}
+          onClose={() => setIsTelegramModalOpen(false)}
+          onConfigSaved={(cfg) => setTelegramConfig(cfg)}
+        />
+      )}
     </div>
   );
 };

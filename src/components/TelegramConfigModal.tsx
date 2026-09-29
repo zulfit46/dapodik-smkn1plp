@@ -20,7 +20,8 @@ import {
   Bot, 
   MessageSquare, 
   ShieldCheck, 
-  ExternalLink 
+  ExternalLink,
+  Info 
 } from 'lucide-react';
 
 interface TelegramConfigModalProps {
@@ -120,7 +121,7 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-bold tracking-wide">Pengaturan Notifikasi Telegram</h2>
-              <p className="text-xs text-sky-100">Kirim otomatis info mutasi masuk & keluar ke grup/chat Telegram</p>
+              <p className="text-xs text-sky-100">Kirim otomatis info mutasi, kenaikan pangkat, & KGB ke grup/chat Telegram</p>
             </div>
           </div>
           <button
@@ -148,7 +149,7 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-slate-600">
-                  {config.enabled ? 'Notifikasi otomatis akan dikirim ke Telegram setiap kali ada mutasi baru' : 'Notifikasi Telegram dinonaktifkan sementara'}
+                  {config.enabled ? 'Notifikasi otomatis aktif untuk data mutasi, kenaikan pangkat, dan KGB baru' : 'Notifikasi Telegram dinonaktifkan sementara'}
                 </p>
               </div>
             </div>
@@ -161,6 +162,19 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
               />
               <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
             </label>
+          </div>
+
+          {/* Vercel Deployment Tip */}
+          <div className="bg-amber-50/90 border border-amber-200/80 rounded-xl p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
+            <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-bold">Tips untuk Deploy di Vercel:</span>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Di Vercel, token yang Anda simpan di sini akan tersimpan di browser Anda (localStorage). Agar bot otomatis aktif bagi semua pengguna, Anda juga dapat menambahkan <strong>Environment Variables</strong> di dashboard Vercel (Project Settings &rarr; Environment Variables):
+                <code className="mx-1 px-1.5 py-0.5 bg-amber-100 rounded text-amber-950 font-mono text-[10px]">TELEGRAM_BOT_TOKEN</code> dan 
+                <code className="mx-1 px-1.5 py-0.5 bg-amber-100 rounded text-amber-950 font-mono text-[10px]">TELEGRAM_CHAT_ID</code>.
+              </p>
+            </div>
           </div>
 
           {/* Bot Token Input */}
