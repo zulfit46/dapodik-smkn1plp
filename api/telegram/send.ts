@@ -56,14 +56,30 @@ export default async function handler(req: any, res: any) {
     }
 
     const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
-    const tgRes = await fetch(telegramUrl, {
+    let tgRes = await fetch(telegramUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(15000),
     });
 
-    const data: any = await tgRes.json();
+    let data: any = await tgRes.json();
+    let fallbackToMainChat = false;
+
+    // Jika threadId tidak ditemukan di grup, otomatis coba kirim ke chat utama (tanpa message_thread_id)
+    if ((!tgRes.ok || !data.ok) && payload.message_thread_id && String(data.description || '').toLowerCase().includes('thread not found')) {
+      console.warn(`[Vercel Serverless] Thread ID ${payload.message_thread_id} not found in chat ${chatId}. Retrying into main chat...`);
+      delete payload.message_thread_id;
+      tgRes = await fetch(telegramUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
+      });
+      data = await tgRes.json();
+      fallbackToMainChat = true;
+    }
+
     if (!tgRes.ok || !data.ok) {
       return res.status(tgRes.status || 400).json({
         status: 'error',
@@ -73,7 +89,10 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({
       status: 'success',
-      message: 'Pesan berhasil dikirim ke Telegram',
+      message: fallbackToMainChat
+        ? 'Pesan dialihkan ke ruang chat utama grup karena Topik/Thread ID tidak ditemukan di grup Telegram'
+        : 'Pesan berhasil dikirim ke Telegram',
+      fallbackToMainChat,
       result: data,
     });
   } catch (err: any) {
