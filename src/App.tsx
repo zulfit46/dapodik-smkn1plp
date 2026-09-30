@@ -704,6 +704,7 @@ export default function App() {
               waliKelasList={waliKelasList}
               authenticatedWali={authenticatedWali}
               currentUser={currentUser}
+              appConfig={appConfig}
               onAuthenticateWali={handleSetAuthenticatedWali}
               onSaveVerval={handleSaveVerval}
               onNavigateTab={(tab) => setActiveTab(tab)}
