@@ -24,14 +24,17 @@ export const DEFAULT_TELEGRAM_CONFIG: TelegramConfig = {
   notifyMutasiKeluar: true,
   notifyPangkatBaru: true,
   notifyKGBBaru: true,
+  notifyVervalPD: true,
   threadIdMutasiMasuk: '',
   threadIdMutasiKeluar: '',
   threadIdPangkat: '',
   threadIdKGB: '',
+  threadIdVervalPD: '',
   chatIdMutasiMasuk: '',
   chatIdMutasiKeluar: '',
   chatIdPangkat: '',
   chatIdKGB: '',
+  chatIdVervalPD: '',
 };
 
 /**
@@ -70,14 +73,17 @@ export async function getTelegramConfig(): Promise<TelegramConfig> {
         notifyMutasiKeluar: localConfig.notifyMutasiKeluar ?? serverConfig.notifyMutasiKeluar ?? true,
         notifyPangkatBaru: localConfig.notifyPangkatBaru ?? serverConfig.notifyPangkatBaru ?? true,
         notifyKGBBaru: localConfig.notifyKGBBaru ?? serverConfig.notifyKGBBaru ?? true,
+        notifyVervalPD: localConfig.notifyVervalPD ?? serverConfig.notifyVervalPD ?? true,
         threadIdMutasiMasuk: localConfig.threadIdMutasiMasuk ?? serverConfig.threadIdMutasiMasuk ?? '',
         threadIdMutasiKeluar: localConfig.threadIdMutasiKeluar ?? serverConfig.threadIdMutasiKeluar ?? '',
         threadIdPangkat: localConfig.threadIdPangkat ?? serverConfig.threadIdPangkat ?? '',
         threadIdKGB: localConfig.threadIdKGB ?? serverConfig.threadIdKGB ?? '',
+        threadIdVervalPD: localConfig.threadIdVervalPD ?? serverConfig.threadIdVervalPD ?? '',
         chatIdMutasiMasuk: localConfig.chatIdMutasiMasuk ?? serverConfig.chatIdMutasiMasuk ?? '',
         chatIdMutasiKeluar: localConfig.chatIdMutasiKeluar ?? serverConfig.chatIdMutasiKeluar ?? '',
         chatIdPangkat: localConfig.chatIdPangkat ?? serverConfig.chatIdPangkat ?? '',
         chatIdKGB: localConfig.chatIdKGB ?? serverConfig.chatIdKGB ?? '',
+        chatIdVervalPD: localConfig.chatIdVervalPD ?? serverConfig.chatIdVervalPD ?? '',
       };
       safeSetItem(STORAGE_KEY, merged);
       return merged;
@@ -97,6 +103,7 @@ export async function getTelegramConfig(): Promise<TelegramConfig> {
     enabled: localConfig.enabled ?? Boolean(token && chat),
     notifyPangkatBaru: localConfig.notifyPangkatBaru ?? true,
     notifyKGBBaru: localConfig.notifyKGBBaru ?? true,
+    notifyVervalPD: localConfig.notifyVervalPD ?? true,
   };
 }
 
@@ -505,6 +512,95 @@ export async function notifyMutasiKeluar(
 
   const targetChatId = conf.chatIdMutasiKeluar || conf.chatId;
   const threadId = conf.threadIdMutasiKeluar;
+
+  return sendTelegramMessage(message, conf, webAppUrl, { threadId, targetChatId });
+}
+
+export interface VervalPDItemNotification {
+  nama?: string;
+  nisn?: string;
+  nipd?: string;
+  rombel?: string;
+  status: string;
+  oldStatus?: string;
+  ket?: string;
+  oldKet?: string;
+  timestamp?: string;
+  vervalOleh?: string;
+}
+
+/**
+ * Format & Send Notification for Verval PD (Perubahan Status Siswa Aktif / Tidak Aktif)
+ */
+export async function notifyVervalPD(
+  items: VervalPDItemNotification[],
+  meta?: {
+    actorName?: string;
+    kelasName?: string;
+  },
+  config?: TelegramConfig,
+  webAppUrl?: string
+): Promise<{ success: boolean; message: string }> {
+  const conf = config || await getTelegramConfig();
+  if (!conf.enabled || conf.notifyVervalPD === false) {
+    return { success: false, message: 'Notifikasi Verval PD tidak diaktifkan' };
+  }
+
+  if (!items || items.length === 0) {
+    return { success: false, message: 'Tidak ada data perubahan untuk dikirim' };
+  }
+
+  const now = new Date();
+  const waktuStr = `${now.toLocaleDateString('id-ID')} ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+
+  const actor = meta?.actorName || items[0]?.vervalOleh || 'Wali Kelas / Operator';
+  const kelas = meta?.kelasName || items[0]?.rombel || '-';
+
+  // Format list of changed students
+  const maxDisplay = 15;
+  const displayItems = items.slice(0, maxDisplay);
+  const remainingCount = items.length - maxDisplay;
+
+  const daftarSiswaStr = displayItems.map((item, idx) => {
+    const isAktif = (item.status || '').toLowerCase() === 'aktif';
+    const statusBadge = isAktif ? '🟢 <b>Aktif</b>' : '🔴 <b>Tidak Aktif</b>';
+    const statusPrev = item.oldStatus && item.oldStatus !== item.status 
+      ? ` <i>(Sebelumnya: ${escapeTelegramHtml(item.oldStatus)})</i>` 
+      : '';
+    const ketText = !isAktif && item.ket 
+      ? `\n   💬 <i>Alasan/Ket: ${escapeTelegramHtml(item.ket)}</i>` 
+      : '';
+
+    return `${idx + 1}. 👤 <b>${escapeTelegramHtml(item.nama || '-')}</b>
+   🆔 NISN: <code>${escapeTelegramHtml(item.nisn || '-')}</code> | NIPD: <code>${escapeTelegramHtml(item.nipd || '-')}</code>
+   📌 Status: ${statusBadge}${statusPrev}${ketText}`;
+  }).join('\n\n');
+
+  const moreText = remainingCount > 0 
+    ? `\n\n<i>...dan ${remainingCount} siswa lainnya diperbarui.</i>` 
+    : '';
+
+  const aktifCount = items.filter(i => (i.status || '').toLowerCase() === 'aktif').length;
+  const tidakAktifCount = items.filter(i => (i.status || '').toLowerCase() !== 'aktif').length;
+  const ringkasan = `📊 <b>Ringkasan:</b> 🟢 Aktif: <b>${aktifCount}</b> | 🔴 Tidak Aktif: <b>${tidakAktifCount}</b> (Total: <b>${items.length}</b> siswa)`;
+
+  const message = `📋 <b>[VERVAL PD] NOTIFIKASI PERUBAHAN STATUS SISWA</b>
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>Wali Kelas / Verifikator:</b> <b>${escapeTelegramHtml(actor)}</b>
+🏛️ <b>Rombel / Kelas:</b> <b>${escapeTelegramHtml(kelas)}</b>
+${ringkasan}
+⏰ <b>Waktu Perubahan:</b> ${escapeTelegramHtml(waktuStr)}
+━━━━━━━━━━━━━━━━━━━━
+<b>Rincian Siswa yang Diperbarui:</b>
+
+${daftarSiswaStr}${moreText}
+━━━━━━━━━━━━━━━━━━━━
+🏛️ <i>Sistem Informasi Data Siswa SMKN 1 Palopo</i>
+
+#VERVAL_PD #STATUS_SISWA #DAPODIK`;
+
+  const targetChatId = conf.chatIdVervalPD || conf.chatId;
+  const threadId = conf.threadIdVervalPD;
 
   return sendTelegramMessage(message, conf, webAppUrl, { threadId, targetChatId });
 }
