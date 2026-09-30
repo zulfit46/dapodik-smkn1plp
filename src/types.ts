@@ -23,6 +23,9 @@ export interface Student {
   statusRegistrasi?: 'Aktif' | 'Siswa Baru' | 'Pindahan' | 'Lulus' | 'Keluar';
   status?: 'Aktif' | 'Tidak Aktif' | string;
   ket?: 'Mutasi' | 'Dikeluarkan' | 'Mengundurkan Diri' | 'Putus Sekolah' | 'Wafat' | 'Hilang' | string;
+  timestamp?: string;
+  vervalOleh?: string;
+  verval_oleh?: string;
   tanggalMasuk?: string;
   sekolahAsal?: string;
   tinggiBadan?: number; // cm
