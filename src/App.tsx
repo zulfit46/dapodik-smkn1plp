@@ -463,8 +463,19 @@ export default function App() {
     }
   };
 
-  // Save Verval PD (Status & Keterangan)
-  const handleSaveVerval = async (updates: { id: string; studentId?: string; nisn?: string; nipd?: string; status: string; ket: string; nama?: string }[]) => {
+  // Save Verval PD (Status, Keterangan, Timestamp, & Verval Oleh)
+  const handleSaveVerval = async (updates: { 
+    id: string; 
+    studentId?: string; 
+    nisn?: string; 
+    nipd?: string; 
+    status: string; 
+    ket: string; 
+    nama?: string;
+    timestamp?: string;
+    vervalOleh?: string;
+    verval_oleh?: string;
+  }[]) => {
     if (!updates || updates.length === 0) return null;
 
     // Update local React state and local storage immediately
@@ -478,7 +489,14 @@ export default function App() {
           (u.nama && s.nama && u.nama.trim().toLowerCase() === s.nama.trim().toLowerCase())
         );
         if (match) {
-          return { ...s, status: match.status, ket: match.ket };
+          return { 
+            ...s, 
+            status: match.status, 
+            ket: match.ket,
+            timestamp: match.timestamp || s.timestamp,
+            vervalOleh: match.vervalOleh || (s as any).vervalOleh,
+            verval_oleh: match.verval_oleh || match.vervalOleh || (s as any).verval_oleh
+          };
         }
         return s;
       });
