@@ -94,6 +94,11 @@ export async function fetchStudentsDirectly(config: AppConfig): Promise<Student[
                 if (hClean === 'beratbadan') obj.beratBadan = strVal;
                 if (hClean === 'jaraksekolah') obj.jarakSekolah = strVal;
                 if (hClean === 'jumsaudara' || hClean === 'jumlahsaudara') obj.jumlahSaudara = strVal;
+                if (hClean === 'timestamp' || hClean === 'waktu' || hClean === 'tglverval') obj.timestamp = strVal;
+                if (hClean === 'vervaloleh' || hClean === 'petugasverval' || hClean === 'petugas' || hClean === 'walikelas' || hClean === 'verifikator') {
+                  obj.vervalOleh = strVal;
+                  obj.verval_oleh = strVal;
+                }
               });
 
               let baseId = obj.nipd || obj.nisn || `STU-${i}`;
@@ -149,7 +154,18 @@ export async function fetchStudentsDirectly(config: AppConfig): Promise<Student[
  */
 export async function syncVervalDirectly(
   webAppUrl: string,
-  updates: { id: string; studentId?: string; nisn?: string; nipd?: string; status: string; ket: string; nama?: string }[]
+  updates: { 
+    id: string; 
+    studentId?: string; 
+    nisn?: string; 
+    nipd?: string; 
+    status: string; 
+    ket: string; 
+    nama?: string;
+    timestamp?: string;
+    vervalOleh?: string;
+    verval_oleh?: string;
+  }[]
 ): Promise<boolean> {
   if (!webAppUrl) return false;
   try {
@@ -162,7 +178,10 @@ export async function syncVervalDirectly(
         nipd: u.nipd || '',
         nama: u.nama || '',
         status: u.status,
-        ket: u.ket !== undefined ? u.ket : ''
+        ket: u.ket !== undefined ? u.ket : '',
+        timestamp: u.timestamp || '',
+        vervalOleh: u.vervalOleh || (u as any).verval_oleh || '',
+        verval_oleh: u.verval_oleh || u.vervalOleh || ''
       }))
     };
     await fetch(webAppUrl, {
