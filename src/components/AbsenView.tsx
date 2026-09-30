@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Student, WaliKelas, GTKData, ActiveTab } from '../types';
+import { Student, WaliKelas, GTKData, ActiveTab, AppConfig } from '../types';
 import { isUserRole, getWaliKelasForUser } from '../utils/authUtils';
+import { notifyVervalPD, VervalPDItemNotification } from '../services/telegramService';
 import { 
   UserCheck, 
   Save, 
@@ -24,6 +25,7 @@ interface AbsenViewProps {
   waliKelasList?: WaliKelas[];
   authenticatedWali?: WaliKelas | null;
   currentUser?: GTKData | null;
+  appConfig?: AppConfig;
   onAuthenticateWali?: (wali: WaliKelas | null) => void;
   onSaveVerval?: (updatedData: { 
     id: string; 
@@ -48,6 +50,7 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
   waliKelasList = [],
   authenticatedWali = null,
   currentUser = null,
+  appConfig,
   onAuthenticateWali,
   onSaveVerval,
   onNavigateTab
@@ -342,12 +345,50 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
       }
     }
 
+    // Kirim notifikasi Telegram untuk perubahan status Verval PD (Topik: VervalPD)
+    const notifItems: VervalPDItemNotification[] = modifiedStudents.map((student) => {
+      const status = getStudentStatus(student);
+      const ket = status === 'Aktif' ? '' : (getStudentKet(student) || 'Mutasi');
+      const oldStatus = student.status || 'Aktif';
+      const oldKet = student.ket || '';
+      return {
+        nama: student.nama || '-',
+        nisn: student.nisn || '-',
+        nipd: student.nipd || '-',
+        rombel: student.rombel || student.kelas || (selectedRombel !== 'Semua Rombel' ? selectedRombel : (effectiveWali?.kelas || '-')),
+        status,
+        oldStatus,
+        ket,
+        oldKet,
+        timestamp: timestampStr,
+        vervalOleh: actorName,
+      };
+    });
+
+    notifyVervalPD(
+      notifItems,
+      {
+        actorName,
+        kelasName: selectedRombel !== 'Semua Rombel' ? selectedRombel : (effectiveWali?.kelas || 'Semua Rombel'),
+      },
+      undefined,
+      appConfig?.webAppUrl
+    ).then((tgRes) => {
+      if (tgRes?.success) {
+        console.log('[Telegram VervalPD] Notifikasi terkirim:', tgRes.message);
+      } else {
+        console.warn('[Telegram VervalPD] Notifikasi tidak terkirim:', tgRes.message);
+      }
+    }).catch((tgErr) => {
+      console.warn('[Telegram VervalPD] Error kirim notifikasi:', tgErr);
+    });
+
     // Reset local edit states since changes are saved
     setStatusState({});
     setKetState({});
 
     setIsSaving(false);
-    setSavedSuccessMessage('Berhasil simpan data');
+    setSavedSuccessMessage(`Berhasil simpan data${syncFeedback}`);
     setTimeout(() => setSavedSuccessMessage(null), 4000);
   };
 
