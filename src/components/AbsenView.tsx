@@ -25,7 +25,18 @@ interface AbsenViewProps {
   authenticatedWali?: WaliKelas | null;
   currentUser?: GTKData | null;
   onAuthenticateWali?: (wali: WaliKelas | null) => void;
-  onSaveVerval?: (updatedData: { id: string; studentId?: string; nisn?: string; nipd?: string; status: string; ket: string; nama?: string }[]) => Promise<any> | any;
+  onSaveVerval?: (updatedData: { 
+    id: string; 
+    studentId?: string; 
+    nisn?: string; 
+    nipd?: string; 
+    status: string; 
+    ket: string; 
+    nama?: string;
+    timestamp?: string;
+    vervalOleh?: string;
+    verval_oleh?: string;
+  }[]) => Promise<any> | any;
   onNavigateTab?: (tab: ActiveTab) => void;
 }
 
@@ -290,6 +301,11 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
     }
 
     setIsSaving(true);
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const timestampStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const actorName = (effectiveWali?.nama || effectiveWali?.guru || currentUser?.nama || (isUser ? 'Wali Kelas' : 'Administrator')).trim();
+
     const updates = modifiedStudents.map((student) => {
       const status = getStudentStatus(student);
       let ket = '';
@@ -307,7 +323,10 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
         nipd: student.nipd || '',
         nama: student.nama || '',
         status,
-        ket
+        ket,
+        timestamp: timestampStr,
+        vervalOleh: actorName,
+        verval_oleh: actorName
       };
     });
 
@@ -733,7 +752,15 @@ export const AbsenView: React.FC<AbsenViewProps> = ({
                       <td className="py-2.5 px-3 text-center text-slate-500 border-r border-slate-200">{itemIndex}</td>
                       <td className="py-2.5 px-3 font-medium text-slate-800 border-r border-slate-200">{student.nisn || '-'}</td>
                       <td className="py-2.5 px-3 font-medium text-slate-800 border-r border-slate-200">{student.nipd || '-'}</td>
-                      <td className="py-2.5 px-4 font-semibold text-slate-800 border-r border-slate-200">{student.nama}</td>
+                      <td className="py-2.5 px-4 font-semibold text-slate-800 border-r border-slate-200">
+                        <div>{student.nama}</div>
+                        {(student.timestamp || student.vervalOleh) && (
+                          <div className="text-[10px] text-slate-400 font-normal font-mono flex items-center gap-1 mt-0.5" title="Riwayat Terakhir Verval PD">
+                            <span>🕒 {student.timestamp}</span>
+                            {student.vervalOleh && <span>• {student.vervalOleh}</span>}
+                          </div>
+                        )}
+                      </td>
                       <td className="py-2.5 px-3 font-medium text-slate-800 border-r border-slate-200">{student.kelas || '-'}</td>
 
                       {/* Status Column - Clean Radio Options */}
