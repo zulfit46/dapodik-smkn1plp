@@ -49,6 +49,7 @@ let telegramConfig = {
   notifyMutasiKeluar: true,
   notifyPangkatBaru: true,
   notifyKGBBaru: true,
+  notifyVervalPD: true,
 };
 
 try {
@@ -2367,14 +2368,17 @@ async function startServer() {
       notifyMutasiKeluar: telegramConfig.notifyMutasiKeluar !== false,
       notifyPangkatBaru: telegramConfig.notifyPangkatBaru !== false,
       notifyKGBBaru: telegramConfig.notifyKGBBaru !== false,
+      notifyVervalPD: (telegramConfig as any).notifyVervalPD !== false,
       threadIdMutasiMasuk: (telegramConfig as any).threadIdMutasiMasuk || "",
       threadIdMutasiKeluar: (telegramConfig as any).threadIdMutasiKeluar || "",
       threadIdPangkat: (telegramConfig as any).threadIdPangkat || "",
       threadIdKGB: (telegramConfig as any).threadIdKGB || "",
+      threadIdVervalPD: (telegramConfig as any).threadIdVervalPD || "",
       chatIdMutasiMasuk: (telegramConfig as any).chatIdMutasiMasuk || "",
       chatIdMutasiKeluar: (telegramConfig as any).chatIdMutasiKeluar || "",
       chatIdPangkat: (telegramConfig as any).chatIdPangkat || "",
       chatIdKGB: (telegramConfig as any).chatIdKGB || "",
+      chatIdVervalPD: (telegramConfig as any).chatIdVervalPD || "",
     });
   });
 
@@ -2388,14 +2392,17 @@ async function startServer() {
         notifyMutasiKeluar,
         notifyPangkatBaru,
         notifyKGBBaru,
+        notifyVervalPD,
         threadIdMutasiMasuk,
         threadIdMutasiKeluar,
         threadIdPangkat,
         threadIdKGB,
+        threadIdVervalPD,
         chatIdMutasiMasuk,
         chatIdMutasiKeluar,
         chatIdPangkat,
         chatIdKGB,
+        chatIdVervalPD,
       } = req.body;
 
       telegramConfig = {
@@ -2406,14 +2413,17 @@ async function startServer() {
         notifyMutasiKeluar: typeof notifyMutasiKeluar === "boolean" ? notifyMutasiKeluar : telegramConfig.notifyMutasiKeluar,
         notifyPangkatBaru: typeof notifyPangkatBaru === "boolean" ? notifyPangkatBaru : telegramConfig.notifyPangkatBaru,
         notifyKGBBaru: typeof notifyKGBBaru === "boolean" ? notifyKGBBaru : telegramConfig.notifyKGBBaru,
+        notifyVervalPD: typeof notifyVervalPD === "boolean" ? notifyVervalPD : ((telegramConfig as any).notifyVervalPD !== false),
         threadIdMutasiMasuk: typeof threadIdMutasiMasuk === "string" ? threadIdMutasiMasuk.trim() : ((telegramConfig as any).threadIdMutasiMasuk || ""),
         threadIdMutasiKeluar: typeof threadIdMutasiKeluar === "string" ? threadIdMutasiKeluar.trim() : ((telegramConfig as any).threadIdMutasiKeluar || ""),
         threadIdPangkat: typeof threadIdPangkat === "string" ? threadIdPangkat.trim() : ((telegramConfig as any).threadIdPangkat || ""),
         threadIdKGB: typeof threadIdKGB === "string" ? threadIdKGB.trim() : ((telegramConfig as any).threadIdKGB || ""),
+        threadIdVervalPD: typeof threadIdVervalPD === "string" ? threadIdVervalPD.trim() : ((telegramConfig as any).threadIdVervalPD || ""),
         chatIdMutasiMasuk: typeof chatIdMutasiMasuk === "string" ? chatIdMutasiMasuk.trim() : ((telegramConfig as any).chatIdMutasiMasuk || ""),
         chatIdMutasiKeluar: typeof chatIdMutasiKeluar === "string" ? chatIdMutasiKeluar.trim() : ((telegramConfig as any).chatIdMutasiKeluar || ""),
         chatIdPangkat: typeof chatIdPangkat === "string" ? chatIdPangkat.trim() : ((telegramConfig as any).chatIdPangkat || ""),
         chatIdKGB: typeof chatIdKGB === "string" ? chatIdKGB.trim() : ((telegramConfig as any).chatIdKGB || ""),
+        chatIdVervalPD: typeof chatIdVervalPD === "string" ? chatIdVervalPD.trim() : ((telegramConfig as any).chatIdVervalPD || ""),
       } as any;
 
       try {
