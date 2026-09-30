@@ -250,6 +250,11 @@ async function fetchFromGoogleSheets(): Promise<Student[] | null> {
                   if (hClean === 'beratbadan') obj.beratBadan = strVal;
                   if (hClean === 'jaraksekolah') obj.jarakSekolah = strVal;
                   if (hClean === 'jumsaudara' || hClean === 'jumlahsaudara') obj.jumlahSaudara = strVal;
+                  if (hClean === 'timestamp' || hClean === 'waktu' || hClean === 'tglverval') obj.timestamp = strVal;
+                  if (hClean === 'vervaloleh' || hClean === 'petugasverval' || hClean === 'petugas' || hClean === 'walikelas' || hClean === 'verifikator') {
+                    obj.vervalOleh = strVal;
+                    obj.verval_oleh = strVal;
+                  }
                 });
 
                 let baseId = obj.nipd || obj.nisn || `STU-${i}`;
@@ -2641,7 +2646,10 @@ async function startServer() {
         studentList[index] = {
           ...studentList[index],
           status: u.status,
-          ket: u.ket !== undefined ? u.ket : ''
+          ket: u.ket !== undefined ? u.ket : '',
+          timestamp: u.timestamp || studentList[index].timestamp,
+          vervalOleh: u.vervalOleh || (studentList[index] as any).vervalOleh,
+          verval_oleh: u.verval_oleh || u.vervalOleh || (studentList[index] as any).verval_oleh
         };
         updatedStudents.push(studentList[index]);
       } else {
@@ -2652,7 +2660,10 @@ async function startServer() {
           nisn: u.nisn || '',
           nipd: u.nipd || '',
           status: u.status,
-          ket: u.ket !== undefined ? u.ket : ''
+          ket: u.ket !== undefined ? u.ket : '',
+          timestamp: u.timestamp,
+          vervalOleh: u.vervalOleh,
+          verval_oleh: u.verval_oleh || u.vervalOleh
         };
         studentList.push(fallbackStudent as Student);
         updatedStudents.push(fallbackStudent as Student);
@@ -2677,10 +2688,15 @@ async function startServer() {
           cachedSheetsData![idx] = {
             ...cachedSheetsData![idx],
             status: u.status,
-            ket: u.ket !== undefined ? u.ket : ''
+            ket: u.ket !== undefined ? u.ket : '',
+            timestamp: u.timestamp || cachedSheetsData![idx].timestamp,
+            vervalOleh: u.vervalOleh || (cachedSheetsData![idx] as any).vervalOleh,
+            verval_oleh: u.verval_oleh || u.vervalOleh || (cachedSheetsData![idx] as any).verval_oleh
           };
           (cachedSheetsData![idx] as any).Status = u.status;
           (cachedSheetsData![idx] as any).Ket = u.ket !== undefined ? u.ket : '';
+          if (u.timestamp) (cachedSheetsData![idx] as any).Timestamp = u.timestamp;
+          if (u.vervalOleh) (cachedSheetsData![idx] as any).Verval_Oleh = u.vervalOleh;
         }
       });
     }
@@ -2699,7 +2715,10 @@ async function startServer() {
             nipd: s.nipd || '',
             nama: s.nama || '',
             status: s.status || 'Aktif',
-            ket: s.ket !== undefined ? s.ket : ''
+            ket: s.ket !== undefined ? s.ket : '',
+            timestamp: s.timestamp || '',
+            vervalOleh: (s as any).vervalOleh || (s as any).verval_oleh || '',
+            verval_oleh: (s as any).verval_oleh || (s as any).vervalOleh || ''
           }))
         };
 
