@@ -44,13 +44,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ gtkList, onLogin }) => {
       }
     } catch {}
 
-    // Find matching GTK by NIP (or fallback by NUPTK / ID)
+    // Find matching GTK by NIP (or fallback by NUPTK / NIK / ID)
     const matched = candidateList.find((g) => {
       const gNip = cleanNip(g.nip || '');
       const gNuptk = cleanNip(g.nuptk || '');
+      const gNik = cleanNip(g.nik || '');
       return (
         (gNip && gNip === inputCleaned) ||
         (gNuptk && gNuptk === inputCleaned) ||
+        (gNik && gNik === inputCleaned) ||
         g.id?.toLowerCase() === nipInput.trim().toLowerCase()
       );
     });
@@ -85,18 +87,63 @@ export const LoginView: React.FC<LoginViewProps> = ({ gtkList, onLogin }) => {
       <div className="relative w-full max-w-md z-10">
         {/* Card Header & Brand with Glassmorphism */}
         <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl shadow-indigo-950/40 border border-white/50 overflow-hidden transition-all duration-300">
-          {/* Top Brand Banner */}
-          <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-purple-700 p-6 text-white text-center relative overflow-hidden">
-            <div className="absolute inset-0 bg-white/5 opacity-50 backdrop-blur-3xs pointer-events-none" />
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-white p-1.5 shadow-xl mb-3 flex items-center justify-center transform hover:scale-105 transition-transform duration-300 ring-4 ring-white/20">
-              <img
-                src={DAPO1_BASE64 || '/dapo-1.png'}
-                alt="Logo SMKN 1 Palopo"
-                className="w-full h-full object-contain"
-              />
+          {/* Top Brand Banner - Styled matching uploaded mockup */}
+          <div className="bg-gradient-to-r from-[#440b82] via-[#291e8e] to-[#0c62d8] px-6 py-8 sm:py-9 text-white text-center relative overflow-hidden">
+            {/* Background Decorative: Left Concentric Arcs / Waves */}
+            <svg 
+              className="absolute -left-12 -top-12 w-64 h-64 pointer-events-none opacity-20" 
+              viewBox="0 0 200 200" 
+              fill="none"
+              aria-hidden="true"
+            >
+              <circle cx="50" cy="50" r="110" stroke="white" strokeWidth="1.5" strokeOpacity="0.4" />
+              <circle cx="50" cy="50" r="85" stroke="white" strokeWidth="1.2" strokeOpacity="0.5" />
+              <circle cx="50" cy="50" r="60" stroke="white" strokeWidth="1" strokeOpacity="0.6" />
+              <circle cx="50" cy="50" r="35" stroke="white" strokeWidth="0.8" strokeOpacity="0.7" />
+            </svg>
+
+            {/* Background Decorative: Right Tech Wireframe / Mesh Waves */}
+            <svg 
+              className="absolute -right-6 -bottom-6 w-72 h-48 pointer-events-none opacity-30" 
+              viewBox="0 0 300 200" 
+              fill="none"
+              aria-hidden="true"
+            >
+              <path d="M40,180 Q120,80 200,120 T320,50" stroke="#38bdf8" strokeWidth="1" strokeOpacity="0.8" fill="none" />
+              <path d="M20,190 Q105,95 185,135 T305,70" stroke="#60a5fa" strokeWidth="0.8" strokeOpacity="0.7" fill="none" />
+              <path d="M60,170 Q135,65 215,105 T335,35" stroke="#38bdf8" strokeWidth="0.8" strokeOpacity="0.6" fill="none" />
+              <path d="M0,200 Q85,115 165,155 T285,90" stroke="#93c5fd" strokeWidth="0.7" strokeOpacity="0.5" fill="none" />
+              <path d="M80,160 L120,95 L150,115 L190,85 L230,125 L260,95 L300,130" stroke="#38bdf8" strokeWidth="0.6" strokeOpacity="0.5" fill="none" />
+              <path d="M120,95 L160,125 L200,135 L240,155 L280,125" stroke="#93c5fd" strokeWidth="0.5" strokeOpacity="0.4" fill="none" />
+              <path d="M150,115 L180,95 L220,135 L260,105" stroke="#38bdf8" strokeWidth="0.5" strokeOpacity="0.3" fill="none" />
+            </svg>
+
+            {/* Subtle light aura glow behind squircle */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[65%] w-36 h-36 bg-blue-400/25 rounded-full blur-xl pointer-events-none" />
+
+            {/* Center Logo Squircle with Glowing Double Aura */}
+            <div className="relative z-10 mx-auto mb-3.5 inline-flex items-center justify-center">
+              {/* Outer Glowing Ring */}
+              <div className="p-1 rounded-[26px] bg-gradient-to-br from-white/70 via-blue-200/40 to-indigo-300/30 shadow-[0_0_28px_rgba(96,165,250,0.65),0_10px_25px_rgba(0,0,0,0.35)] outline outline-2 outline-white/30 outline-offset-2">
+                {/* White Squircle Box */}
+                <div className="w-[78px] h-[78px] sm:w-[86px] sm:h-[86px] bg-white rounded-[22px] p-2 sm:p-2.5 flex items-center justify-center shadow-inner">
+                  {/* Logo Asli Sekolah SMKN 1 Palopo */}
+                  <img
+                    src={DAPO1_BASE64 || '/dapo-1.png'}
+                    alt="Logo SMKN 1 Palopo"
+                    className="w-full h-full object-contain drop-shadow-xs"
+                  />
+                </div>
+              </div>
             </div>
-            <h1 className="text-xl font-extrabold tracking-wide drop-shadow-xs">SMKN 1 PALOPO</h1>
-            <p className="text-xs text-indigo-100 font-medium mt-0.5">Sistem Informasi Manajemen Sekolah</p>
+
+            {/* Title & Subtitle */}
+            <h1 className="text-2xl sm:text-[26px] font-black tracking-wider text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)] mt-1">
+              DAPODIK
+            </h1>
+            <p className="text-xs sm:text-[13px] text-blue-50/90 font-medium tracking-normal mt-0.5">
+              SMKN 1 PALOPO
+            </p>
           </div>
 
           {/* Form Content */}
