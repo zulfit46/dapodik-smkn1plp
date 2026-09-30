@@ -69,14 +69,17 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
     notifyMutasiKeluar: true,
     notifyPangkatBaru: true,
     notifyKGBBaru: true,
+    notifyVervalPD: true,
     threadIdMutasiMasuk: '',
     threadIdMutasiKeluar: '',
     threadIdPangkat: '',
     threadIdKGB: '',
+    threadIdVervalPD: '',
     chatIdMutasiMasuk: '',
     chatIdMutasiKeluar: '',
     chatIdPangkat: '',
     chatIdKGB: '',
+    chatIdVervalPD: '',
   });
 
   const [showToken, setShowToken] = useState(false);
@@ -318,6 +321,21 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                   <div className="text-slate-600 text-[11px]">Data riwayat KGB baru</div>
                 </div>
               </label>
+
+              <label className="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors bg-white sm:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={config.notifyVervalPD !== false}
+                  onChange={(e) => setConfig({ ...config, notifyVervalPD: e.target.checked })}
+                  className="rounded text-sky-600 focus:ring-sky-500 w-4 h-4"
+                />
+                <div className="text-xs">
+                  <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                    <span>📋</span> Verval PD (Status Siswa)
+                  </div>
+                  <div className="text-slate-600 text-[11px]">Perubahan data aktif / tidak aktif oleh wali kelas</div>
+                </div>
+              </label>
             </div>
           </div>
 
@@ -514,6 +532,44 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                       />
                     </div>
                   </div>
+
+                  {/* 5. Verval PD */}
+                  <div className="p-3 bg-sky-50/70 rounded-xl border border-sky-200 space-y-2 sm:col-span-2">
+                    <div className="flex items-center justify-between font-semibold text-slate-800">
+                      <span className="flex items-center gap-1.5">
+                        <span>📋</span> Verval PD (Status Siswa)
+                      </span>
+                      <span className="text-[10px] text-sky-800 bg-sky-100 font-bold px-2 py-0.5 rounded-full border border-sky-200">
+                        Topik: VervalPD
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] text-slate-600 mb-1 font-medium">
+                          Thread / Topik ID:
+                        </label>
+                        <input
+                          type="text"
+                          value={config.threadIdVervalPD || ''}
+                          onChange={(e) => setConfig({ ...config, threadIdVervalPD: parseTelegramThreadId(e.target.value) })}
+                          placeholder="Contoh: 15 (atau paste link topik t.me/c/...)"
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-600 mb-1 font-medium">
+                          Chat ID Khusus (Opsional):
+                        </label>
+                        <input
+                          type="text"
+                          value={config.chatIdVervalPD || ''}
+                          onChange={(e) => setConfig({ ...config, chatIdVervalPD: parseTelegramChatId(e.target.value) })}
+                          placeholder="Kosongkan jika pakai Chat ID utama"
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono text-[11px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -585,7 +641,7 @@ export const TelegramConfigModal: React.FC<TelegramConfigModalProps> = ({
                       Di grup Telegram Anda, buka pengaturan grup &rarr; aktifkan pilihan <b>Topics</b> (Forum mode).
                     </li>
                     <li>
-                      Buat topik baru (misal: "Mutasi Masuk", "Mutasi Keluar", "Kenaikan Pangkat", "KGB").
+                      Buat topik baru (misal: "VervalPD", "Mutasi Masuk", "Mutasi Keluar", "Kenaikan Pangkat", "KGB").
                     </li>
                     <li>
                       Buka sub-topik tersebut &rarr; klik ikon titik tiga di pojok kanan atas &rarr; pilih <b>Copy Link</b> (atau klik kanan pesan &rarr; Copy Message Link).
